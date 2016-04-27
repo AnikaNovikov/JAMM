@@ -230,6 +230,8 @@ countreads = function(bamfile, index, reads, frag, chromsize, filelist, chrcount
   #o ist die Nummer des Chromosoms
   ###########COMMENT FROM MAHMOUD################
   ## In my implementation, o was not the chromosome, it was which replicate. Just pointing it out in case you didn't set it up here on purpose
+  ###########ANSWER##############################
+  ## well actually that was just my first guess, later I figured out what it was and that it was pretty useful, I used in all scripts to know which replicate it was
   ###############################################
 	o = which(filelist == bamfile)
 	#print(paste("o",o,class(o)))
@@ -279,11 +281,19 @@ countreads = function(bamfile, index, reads, frag, chromsize, filelist, chrcount
 	###########COMMENT FROM MAHMOUD################
 	## I think so, yes. Would be nice to get an error here and skip
 	###############################################
+  ## the alsover element a bit down from here would make sure that there are no reads after the chromosome end. So should I skip to the next chromosome or quit?
+  ## at the moment it's quitting but of course we could just use a next(). At least as long as it's still a for loop, it would jump to the next chromosome. 
+  ## for apply I don't know, but I guess it works there as well.
+  ###############################################
     
     als <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(element,IRanges(1,as.integer(chromlength)))))
-   	###########COMMENT FROM MAHMOUD################
+  #############COMMENT FROM MAHMOUD################
 	## what is 536870912? You call the same function twice but with that difference
-	###############################################
+	#############ANSWER##############################
+  ## I check whether there are reads after the end of the chromosome, so I look from chromlength to 536870912. I wanted to use Max.int or something like this, because
+  ## I don't know the maximum coordinate. But for some reason this number here is the biggest that readGAlignments allows. If I go even one number higher, I get an error.
+  ## So that's because of the package used.
+  #################################################
     alsover <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(element,IRanges(as.integer(chromlength),536870912))))
     if(!!length(alsover)){
       #message(paste0(chromName, ", Warning: Chromosome ",element,"has no reads, Skipped!"))
@@ -335,6 +345,14 @@ countreads = function(bamfile, index, reads, frag, chromsize, filelist, chrcount
     ## I couldn't follow this part right before here
     ## Maybe you can explain to me later
     #####################################
+    ## I have to extract start, end, ... because to remove any reads that would be out of range after resizing, I have to change
+    ## their values outside the GRanges element. Inside the element the package won't let me make any changes, with some weird explanation
+    ## like "the user isn't supposed to change this because that would destroy the sense of some attributes, ..." Yeah so I have to make a new element
+    ## The coverage function counts how many reads are at which position, for every chromosome so then I extract the current chromosome.
+    ## As GRanges it's a better object to work with, even though again it won't let me change anything, just extract. 
+    ## Values is a big vector that is compressed, because consecutive positions in the chromosome with the same
+    ## counts are summarized. And after this comment here I decompress this to a chromosome size long vector.
+  	#####################################
     #decompress counts to a chromosome size long vector
     reslist <- mapply(makeVectors,st,en,values,SIMPLIFY=FALSE)
     curvector <- unlist(reslist)
@@ -370,6 +388,10 @@ countreads = function(bamfile, index, reads, frag, chromsize, filelist, chrcount
     ## If I got it right, this has all the counts for the whole genome. If so, it will for sure be huge, regardless of whether you can delete the  previous "reslist", "st"...etc.
     ## The alternative to be able to directly call 
     #####################################
+    ## Ok so I will try to do this. Although it might be that this only solves a small part of the problem. In one run I asked about how big this 
+    ## storing object was, and it was about 1GB. "als" will be huge, probably even bigger than countlist. If I can't remove als after counting, that will
+    ## take a lot of memory as well. 
+  	#####################################
     countlist[[element]] <- curvector
     rm(als,curvector)
     gc()
@@ -1491,6 +1513,8 @@ for (element in chrs)
   
     ###COMMENT FROM MAHMOUD########
     ## If we can call peaks from with the counting function, we wouldn't need this big for loop over all chromosomes.
-    #####################################
+    ###############################
+    ## that's right, so we can just hope that memory freeing works better for functions than for loops
+    ###############################
   chrcount=chrcount+1
 }

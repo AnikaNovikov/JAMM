@@ -429,6 +429,14 @@ countup <- function (bamfile, indexfile, filelist, cornum, presched, rmduplicate
     ################COMMENT FROM MAHMOUD###########
     ##what does this if statement do?
     ###############################################
+    ## because countup does the time intensive part, that is reading in the bam file, I have to calculate the readlengths
+    ## when the data for the chromosome is there. So I have an if statement, that tells me whether I want to calculate the 
+    ## average readlength this time (I do it for the sample files, but not for the input files, but for both kinds of files 
+    ## I call the same function). So I calculate the readlength here from the raw data (ends-starts) and write it to a file
+    ## so it can be read in bincalculator, which is where I will need it.
+    ## It bothers me that calculating the readlength has nothing to do with counting but still has to be done at the same place
+    ## where the counting is.
+    ###############################################
   if(calcreadlen){
     rl <- calculateAverageReadLength(store)
     #print(rl)
