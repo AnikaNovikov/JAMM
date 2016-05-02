@@ -496,7 +496,10 @@ pickbins = function(winStart, counts, binSize, chromSize, numdup, C, cutoff, str
 		mCs = mean(Cs)
 		dCs = sd(Cs)
 	}
-
+  #print(paste("winStart",winStart,"counts",Cs,"binSize",binSize,"chromSize",chromSize,"numdup",numdup,"C",C,"cutoff",cutoff,"strict",strict,"mCs",mCs,"dCs",dCs,"bkgd",bkgd))
+  if (Cs>0){
+    #print("count is >0")
+  }
 	go = rep(0, numdup)
 	for (g in 1:numdup) {
 		mS = (mean(counts[[g]][winStart:tempend])) 
@@ -1248,6 +1251,7 @@ if (is.null(areinbkgd)){
 chrcount=1
 datapool=counts
 counts <- NA
+print(paste("chrs",chrs))
 for (element in chrs)
 {
   print(paste("Calling peaks of chromosome",element))
@@ -1262,7 +1266,7 @@ for (element in chrs)
   {
     counts[[i]]=datapool[[i]][[element]]
   }
-  
+  print(paste("sum counts",sum(counts[[1]]),sum(counts[[2]]),sum(counts[[3]])))
   
   
   # ============================ 
@@ -1339,11 +1343,13 @@ for (element in chrs)
   coffeeshop[coffeeshop != numdup] = 0
   
   if (sum(coffeeshop) != 0) { #Any enriched bins?
+    print("1 is true")
     coffeeshop = c(0, diff(coffeeshop))
     coffeeshop = cbind(coffeeshop, bins)
     coffeeshopNord = coffeeshop[coffeeshop[,1] == numdup,,drop=FALSE]
     coffeeshopSud = coffeeshop[coffeeshop[,1] == -numdup,,drop=FALSE]
     if (nrow(coffeeshopNord) != 0) { #Any enriched bins?
+      print("2's true")
       coffeeshopNord = coffeeshopNord[,2]
       coffeeshopSud = coffeeshopSud[,2] - 1
       if (length(coffeeshopSud) < length(coffeeshopNord)) {

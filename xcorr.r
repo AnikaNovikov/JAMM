@@ -168,6 +168,8 @@ numbkgd = numdup - nreps
 if (bkgd != "None") {
 	nreps = nreps + 1
 }
+#####in case of error use default readlength in bincalculator
+#iterateoverchromosomes(ibam=ibam, iindex=iindex, cornum=cornum, presched=presched,kpduplicates=FALSE,RCV=ReadChromVector,numbkgd=numbkgd)
 
 #if (numdup != nreps) {
 #	message(paste0(chromName, ": No reads found in one or more replicates!"))
@@ -256,6 +258,9 @@ makeCountList <- function(actlevels, userlevels, userlevellength, binchromv)
 #}
 
 counthelp <- function(readstarts, breaks, cornum, presched){
+  if (!length(readstarts)){
+    return(NA)
+  }
   if (max(readstarts) > max(breaks)) {
     return(rep(0, length = length(breaks)))
   } else {
@@ -278,177 +283,241 @@ normalize <- function (vector)
   return(vector/mean(vector))
 }
 
-countup <- function (bamfile, indexfile, filelist, cornum, presched, rmduplicates=FALSE, RCV=ReadChromVector, calcreadlen=FALSE) 
+#returns countlist, readlength for this chromosome, and the countvector
+#processchromosome <- function(chromname, countlist, kpduplicates=FALSE, chromreference, calcreadlen, RCV=ReadChromVector)
+xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreference, ifrgd, ifrgdindex,ibkgd,ibkgdindex)
 {
-  #print("rcv")
-  #print(RCV)
-  #print(paste("mc.cores",cornum))
-  alsm <- NA; alsp <- NA
-  cat("\n", "xcorr: Counting",bamfile,"\n")
-  o = which(filelist == bamfile)
-  bamname <- bamfile
-  bamfile <- BamFile(bamfile)
-  param <- ScanBamParam()
-  #countlist <<- list()
-  countlist <- list()
-  #creates a list for all chromosomes to calculate xcorr for
-  #print(seqnames(seqinfo(bamfile)));print(chromName);print(chromSize);print(paste("READCHROMVECTOR",RCV))
-  #print("rcv")
-  #makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,RCV)
-  countlist <- makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,RCV)
-  #matchChromNames(seqnames(seqinfo(bamfile)),as.character(chromName),as.integer(chromSize))
-  #countlist[[as.character(chromName)]] <<- as.integer(chromSize)
-  #names(countlist) <<- as.character(chromName)
-  chromnames <- names(countlist)
-  #print(paste(chromnames,class(chromnames)))
-  #open(bamfile)
-  curnum <- 1
-  store <- 0
-  for (element in chromnames)
-  {
-    if(curnum == 1) {
-      cat("\n","Counting:",length(chromnames),"elements","\n")
-      cat(paste0(element,", ",curnum,"; "))
+  #o = which(filelist == bamfile)
+  #bamname <- bamfile
+  #bamfile <- BamFile(bamfile)
+  chromlength <- as.integer(countlist[[chromname]])
+  curnum = which(chromreference == chromname)
+  cat(paste0(chromname,", ",curnum,"; "))
+  als <- NA
+  if(!is.na(ibkgd)){
+    als <- mclapply(ibkgd,readdata,chromname,chromlength,kpduplicates,indexfile=ibkgdindex)
+    if(all(is.na(als))) {
+      countlist[[chromname]] <- NULL
+      return(NULL)
+      #return something
+      #cornum in mclapply
     } else {
-      cat(paste0(element,", ",curnum,"; "))
+      alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex)
+      als <- c(alsf,als)
     }
-    
-    chromlength <- as.integer(countlist[[element]])
-    #print(paste("chromlength",chromlength))
-    #print(bamfile);print(indexfile);print(element);print(class(element));print(as.integer(chromlength))
-    alsm <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=TRUE),which=GRanges(element,IRanges(1,as.integer(chromlength)))))
-    alsp <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=FALSE),which=GRanges(element,IRanges(1,as.integer(chromlength)))))
-    #print(paste("length alsm",length(alsm)))
-    #print(paste("length alsp",length(alsp)))
-    if ((!length(alsm)) && (!length(alsp)))
-    { 
-      countlist[[element]] <- NULL
-      curnum=curnum+1
+  } else {
+    als <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex)
+    if(all(is.na(als))) {
+      countlist[[chromname]] <- NULL
+      return(NULL)
+      #return something
+    }
+  }
+  print(paste("length als",length(als)))
+  #if (is.null(als)) {
+  #  countlist[[chromname]] <- NULL
+  #  return(countlist,NA,NA)
+  #}
+  #alsm <- als[[1]]
+  #alsp <- als[[2]]
+  readlenchr <- NA
+  if (!is.na(ibkgd)) {
+    readlenchr <- mclapply(alsf,getreadleninfo)
+  } else {
+    readlenchr <- mclapply(als,getreadleninfo)
+  }
+  for(i in 1:length(als)){
+    print(i)
+    alsm<-NA;alsp<-NA;alscur<-NA;readstarts<-NA;breaks<-NA
+    alscur <- als[[i]]
+    if(is.na(alscur)){
       next()
     }
-    #readstarts <- list()
-    readstarts <- c()
-    if(!length(alsm)){
-      alsm <- GRanges()
-    } else {
-      alsm <- GRanges(alsm)
-      alsm <- unique(alsm)
-      #alsm <- resize(alsm,1)
-    }
-    if(!length(alsp)){
-      alsp <- GRanges()
-    } else {
-      alsp <- GRanges(alsp)
-      alsp <- unique(alsp)
-      #alsp <- resize(alsp,1)
-    }
-    
-    if(!length(alsm)){
-      #readstarts <- list(start(ranges(alsp)))
-      if (calcreadlen){
-        readstarts <- start(ranges(alsp))
-        readends <- end(ranges(alsp))
-        len <- length(readstarts)
-        result <- readends-readstarts
-        store <- store+c(len,sum(result))
-      }
-      alsp <- resize(alsp,1)
-      readstarts <- list(start(ranges(alsp)))
-      curvnames <- c("+")
-    } else if (!length(alsp)) {
-      #readstarts <- list(start(ranges(alsm)))
-      if(calcreadlen){
-        readstarts <- start(ranges(alsm))
-        readends <- end(ranges(alsm))
-        len <- length(readstarts)
-        result <- readends-readstarts
-        store <- store+c(len,sum(result))
-      }
-      alsm <- resize(alsm,1)
-      readstarts <- list(start(ranges(alsm)))
-      curvnames <- c("-")
-    } else {
-      #readstarts <- list(start(ranges(alsp)),start(ranges(alsm)))
-      if(calcreadlen){
-        readstarts <- c(start(ranges(alsp)),start(ranges(alsm)))
-        readends <- c(end(ranges(alsp)),end(ranges(alsm)))
-        len <- length(readstarts)
-        result <- readends-readstarts
-        store <- store+c(len,sum(result))
-      }
-      alsm <- resize(alsm,1)
-      alsp <- resize(alsp,1)
-      readstarts <- list(start(ranges(alsp)),start(ranges(alsm)))
-      #print(head(readstarts));print(class(readstarts))
-      curvnames <- c("+","-")
-    }
-    #rm(readends)
-    #alsp <- GRanges(readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=FALSE),which=GRanges(element,IRanges(1,as.integer(chromlength))))))
-    #if (rmduplicates) {
-    #  alsm <- unique(alsm)
-    #  alsp <- unique(alsp)
-    #}
-    #alsm <- unique(alsm)
-    #alsp <- unique(alsp)
-    
-    
-    #make the window vector (a vector with start positions of chromosome windows)
+    #print(alscur)
+    alsm <- resize(alscur[[1]],1)
+    alsp <- resize(alscur[[2]],1)
+    readstarts <- list(start(ranges(alsp)),start(ranges(alsm)))
     breaks = seq(1, chromlength, by = 20)
     if (max(breaks) < chromlength) {
       breaks = c(breaks, chromlength);
     }
     curvector <- list()
     curvector <- mclapply(readstarts, counthelp, breaks=breaks, cornum = cornum, presched = presched)
+    #print(paste("Summe curvector 1, 2",sum(curvector[[1]]),sum(curvector[[2]])))
     #normalize the read counts
     #curvector <- lapply(curvector,normalize)
-    
-    #names(curvector) <- c("+","-")
-    names(curvector) <- curvnames
-    #####in case alsm or alsp are empty... adapt condition like above
-    if (all(curvector[[1]] == 0) && all(curvector[[2]] == 0)) {
-      message(paste0(element, ", Warning: Read alignments do not match chromosome length, Skipped!"))
-      quit()
-    }
-    
-    ################COMMENT FROM MAHMOUD###########
-    ##the function "xc" can be run here directly without ever constructing this huge "countlist" variable.
-    ##I think this is what's causing the memory issues and not "curvector"
-    ##In this case the function "countup" would actually return the results from the function "xc" directly
+    names(curvector) <- c("+","-")
+    ################COMMENT FROM ANIKA############
+    ## in this case there would be reads, but none of them would match the chromosome length, right?
+    ## So would it be ok to skip this chromosome for the calculation in the sample files and ignore it for the readlengths as I currently do?
     ###############################################
-    #countlist[[element]] <<- curvector
-    countlist[[element]] <- curvector
-    #print(head(countlist[[element]][["+"]]))
-    #print(paste("head curvector",head(curvector[[1]])))
-    alsm <- NA
-    alsp <- NA
-    curnum=curnum+1
-    #gc()
-    #bamfile <- NA
+    if ((all(curvector[[1]] == 0)||is.na(curvector[[1]])) && (all(curvector[[2]] == 0))||is.na(curvector[[2]])) {
+      message(paste0(chromname, ", Warning: Read alignments do not match chromosome length in one or more replicates, Skipped!"))
+      #quit()
+      countlist[[chromname]]<-NULL
+      #return(countlist,NA,NA)
+      return(NULL)
+    }
+    als[[i]] <- curvector
+    rm(alsm,alsp,alscur,readstarts,curvector,breaks)
+    gc()
   }
   
-    ################COMMENT FROM MAHMOUD###########
-    ##what does this if statement do?
-    ###############################################
-    ## because countup does the time intensive part, that is reading in the bam file, I have to calculate the readlengths
-    ## when the data for the chromosome is there. So I have an if statement, that tells me whether I want to calculate the 
-    ## average readlength this time (I do it for the sample files, but not for the input files, but for both kinds of files 
-    ## I call the same function). So I calculate the readlength here from the raw data (ends-starts) and write it to a file
-    ## so it can be read in bincalculator, which is where I will need it.
-    ## It bothers me that calculating the readlength has nothing to do with counting but still has to be done at the same place
-    ## where the counting is.
-    ###############################################
-  if(calcreadlen){
-    rl <- calculateAverageReadLength(store)
-    #print(rl)
+  # ================== 
+  # Cross Correlation
+  # ==================
+  
+  xcorr = list()
+  #print(als)
+  if(length(ibkgd) > 1) {
+    for (i in ((length(ifrgd)+2):length(als))) {
+      als[[(length(ifrgd)+1)]][[1]] <- als[[(length(ifrgd)+1)]][[1]] + als[[i]][[1]]
+      als[[(length(ifrgd)+1)]][[2]] <- als[[(length(ifrgd)+1)]][[2]] + als[[i]][[2]]
+    }
+    als[(length(ifrgd)+2):length(als)] <- NULL
+  }
+  
+  #print(paste("Summe als 1,2,3",sum(als[[1]][[1]]),sum(als[[1]][[2]]),sum(als[[2]][[1]]),sum(als[[2]][[2]]),sum(als[[3]][[1]]),sum(als[[3]][[2]])))
+  
+  cat("\n","Starting xcorr calculation: ",length(als)," files")
+  xcorr = mclapply(als, xc, cornum = cornum, presched = presched)
+  print(paste("Object als size:",format(object.size(als), units = "Mb")))
+  #print(paste("Objekt xcorr Groesse:",object.size(xcorr, units="Gb")))
+  print(paste("Object xcorr size:",format(object.size(xcorr), units = "Mb")))
+  #=======================> DONE! 
+  
+  
+  # ===================== 
+  # Write result to File
+  # =====================
+  for (i in 1:length(xcorr)) {
+    bamname=ibam[i]
+    filename = strsplit(ibam[i], "/", fixed = TRUE)[[1]]
+    filename = filename[length(filename)]
+    filename = substr(filename,1,nchar(filename)-4)
+    if (i == length(xcorr)) {
+      filename = "ctrl"
+    }
+    
+    correlation <- xcorr[[i]]
+    if ((correlation <= 500) && (correlation >= 50)) { #only write this to file if xcorr value was plausible
+      message(paste0(chromname, ", ", filename, ": Ok!"))
+      write(paste(chromname, correlation, sep = "\t"), file = paste0(storeFile, "/xc.", filename, ".tab"), append = TRUE)
+    } else {
+      if (correlation) {
+      } else {
+        message(paste0(chromname, ", ", filename, ": Value Not Used!"))
+      }
+    }
+  }
+  #return(c(countlist,readlenchr,curvector))
+  return(readlenchr)
+}
+
+getreadleninfo <- function(als){
+  alsm <- als[[1]]
+  alsp <- als[[2]]
+  readstarts <- c(start(ranges(alsp)),start(ranges(alsm)))
+  readends <- c(end(ranges(alsp)),end(ranges(alsm)))
+  len <- length(readstarts)
+  result <- readends-readstarts
+  rm(alsm,alsp)
+  return(c(len,sum(result)))
+  #store <- store+c(len,sum(result))
+}
+
+#readdata <- function(chromname, chromlength, chromreference, ) 
+readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexfile) 
+{
+  bamfile <- BamFile(bamfile)
+  alsm <- NA; alsp <- NA
+  param <- ScanBamParam()
+  alsm <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=TRUE),which=GRanges(chromname,IRanges(1,chromlength))))
+  alsp <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=FALSE),which=GRanges(chromname,IRanges(1,chromlength))))
+  if ((!length(alsm)) && (!length(alsp)))
+  { 
+    return(NA)
+  }
+  if(!length(alsm)){
+    alsm <- GRanges()
+  } else {
+    alsm <- GRanges(alsm)
+  }
+  if(!length(alsp)){
+    alsp <- GRanges()
+  } else {
+    alsp <- GRanges(alsp)
+  }
+  if (kpduplicates){
+    alsp <- unique(alsp)
+    alsm <- unique(alsm)
+  }
+  return(list(alsm,alsp))
+}
+
+
+
+iterateoverchromosomes <- function (ibam, iindex, cornum, presched, kpduplicates=FALSE, RCV=ReadChromVector, numbkgd)
+{
+  if(numbkgd!=0)
+  {
+    ibkgd <- ibam[(length(ibam)-numbkgd+1):length(ibam)]
+    ibkgdindex <- iindex[(length(iindex)-numbkgd+1):length(iindex)]
+    ifrgd <- ibam[1:(length(ibam)-numbkgd)]
+    ifrgdindex <- iindex[1:(length(iindex)-numbkgd)]
+    print(ibkgd);print(ifrgd);
+  } else {
+    ifrgd <- ibam
+    ifrgdindex <- iindex
+    ibkgd <- NA
+    ibkgdindex <- NA
+  }
+  countlist <- list()
+  for (i in 1:(length(ibam))){
+    bamfile <- BamFile(ibam[i])
+    countlist <- c(countlist,makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,RCV))
+    chromnames <- names(countlist)
+    #print(i)    
+    
+  }
+  countlist<-unique(countlist)
+  chromnames <- unique(chromnames)
+  names(countlist) <- chromnames
+  #print(countlist)
+  #chromnames <- names(countlist)
+  #print(chromnames)
+  store <- list()
+  cat("\n","Counting:",length(chromnames),"elements","\n")
+  
+  readlen <- mclapply(chromnames,xcorrelation,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd, ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex)
+  #print(readlen)
+  length(store)<-length(ifrgd)
+  for (j in 1:length(ifrgd)){
+    #print(j)
+    store[[j]] <- 0
+    length(store[[j]])<-2
+    store[[j]][[1]]<- 0
+    store[[j]][[2]]<- 0
+    if (length(readlen)>0){
+      for (i in 1:length(readlen)){
+        #print(i)
+        store[[j]][[1]]<-store[[j]][[1]]+readlen[[i]][[j]][[1]]
+        store[[j]][[2]]<-store[[j]][[2]]+readlen[[i]][[j]][[2]]
+      }
+    }
+  }
+  #print(store)
+  rl <- mclapply(store,calculateAverageReadLength)
+  print(rl)
+  for (i in 1:length(ifrgd)){
+    bamname <- ibam[[i]]
     filename = strsplit(bamname, "/", fixed = TRUE)[[1]]
     filename = filename[length(filename)]
     filename = substr(filename,1,nchar(filename)-4)
-    write(paste(bamname, rl, sep= ","), file = paste0(storeFile, "/xc.rl.", filename, ".tab"), append = TRUE)
-    #write(paste(bamname, rl, sep= ","), file = paste0(storeFile, "xc.rl.", bamname, ".tab"), append = TRUE);
+    
+    write(paste(bamname, rl[[i]], sep= ","), file = paste0(storeFile, "/xc.rl.", filename, ".tab"), append = TRUE)
   }
-  rm(alsm,alsp,curvector,readstarts)
-  gc()
-  return (countlist)
+  #return (countlist)
 }
 
 
@@ -460,16 +529,19 @@ calculateAverageReadLength <- function(store)
 
 xc = function(countlist, cornum, presched) {
   if (sum(unlist(countlist)) != 0) {
-    cat("next, ","\n")
+    cat("\n","next")
 		crossCorrelation = ccf(countlist[[2]], countlist[[1]], plot = FALSE); #xcorr
 		crossCorrelation$lag = crossCorrelation$lag * 20; #correct lag for counts window
 		maxCorr = which.max(crossCorrelation$acf);
 		maxCorr = abs(crossCorrelation$lag[maxCorr]);
+    print(maxCorr)
 		return(maxCorr)
 	} else {
 		return(0)
 	}
 }
+
+iterateoverchromosomes(ibam=ibam, iindex=iindex, cornum=cornum, presched=presched,kpduplicates=FALSE,RCV=ReadChromVector,numbkgd=numbkgd)
 
 #####what if default fragment length, this should work as well
 
@@ -481,29 +553,31 @@ xc = function(countlist, cornum, presched) {
 #  ReadChromVector <- rep(1, times=length(chromName))
 #}
 
+#####iterateoverchromosomes(ibam=ibam, iindex=iindex, cornum=cornum, presched=presched,kpduplicates=FALSE,RCV=ReadChromVector,numbkgd=numbkgd)
 
-areinbkgd <- c()
-if(numbkgd!=0)
-{
-  ibkgd <- ibam[(length(ibam)-numbkgd+1):length(ibam)]
-  ibkgdindex <- iindex[(length(iindex)-numbkgd+1):length(iindex)]
-  datain = mclapply(ibkgd, countup, indexfile=ibkgdindex, filelist = ibam, cornum = cornum, presched = presched, RCV=ReadChromVector, calcreadlen=FALSE)
-  print(paste("size allocated datain",object.size(datain)))
-  if(!length(datain[[1]][[1]])){
-    quit()
-  }
-  for (i in 1:length(datain)) 
-  {
-    areinbkgd <- unique(c(areinbkgd,names(datain[[i]])))
-  }
-  ifrgd <- ibam[1:(length(ibam)-numbkgd)]
-  ifrgdindex <- iindex[1:(length(iindex)-numbkgd)]
-  datainf = mclapply(ifrgd, countup, indexfile=ifrgdindex, filelist = ibam, cornum = cornum, presched = presched,RCV=as.character(areinbkgd), calcreadlen=TRUE)
-  datain = c(datainf,datain)
-  #rm(datainf);gc()
-} else {
-  datain = mclapply(ibam, countup, indexfile=iindex, filelist = ibam, cornum = cornum, presched = presched, RCV=ReadChromVector, calcreadlen=TRUE)
-}
+
+#areinbkgd <- c()
+#if(numbkgd!=0)
+#{
+#  ibkgd <- ibam[(length(ibam)-numbkgd+1):length(ibam)]
+#  ibkgdindex <- iindex[(length(iindex)-numbkgd+1):length(iindex)]
+#  datain = mclapply(ibkgd, countup, indexfile=ibkgdindex, filelist = ibam, cornum = cornum, presched = presched, RCV=ReadChromVector, calcreadlen=FALSE)
+#  print(paste("size allocated datain",object.size(datain)))
+#  if(!length(datain[[1]][[1]])){
+#    quit()
+#  }
+#  for (i in 1:length(datain)) 
+#  {
+#    areinbkgd <- unique(c(areinbkgd,names(datain[[i]])))
+#  }
+#  ifrgd <- ibam[1:(length(ibam)-numbkgd)]
+#  ifrgdindex <- iindex[1:(length(iindex)-numbkgd)]
+#  datainf = mclapply(ifrgd, countup, indexfile=ifrgdindex, filelist = ibam, cornum = cornum, presched = presched,RCV=as.character(areinbkgd), calcreadlen=TRUE)
+#  datain = c(datainf,datain)
+#  #rm(datainf);gc()
+#} else {
+#  datain = mclapply(ibam, countup, indexfile=iindex, filelist = ibam, cornum = cornum, presched = presched, RCV=ReadChromVector, calcreadlen=TRUE)
+#}
 #print(length(datain));print(length(datain[[1]]));print(length(datain[[1]][[1]]));print(length(datain[[1]][["chrY"]]))
 
 
@@ -511,72 +585,72 @@ if(numbkgd!=0)
 # ================== 
 # Cross Correlation
 # ==================
-
-xcorr = list()
-if(numdup-nreps > 0)
-{
-  chrsinbkgd <- names(datain[[nreps]])
-  for (i in (nreps+1):numdup)#nreps would be the first background file, the one the others will be added to
-  {
-    chrsini <- names(datain[[i]])
-    for (j in 1:length(datain[[i]]))
-    {
-      if (chrsini[[j]] %in% chrsinbkgd){
-        datain[[nreps]][[chrsini[[j]]]][[1]] <- datain[[nreps]][[chrsini[[j]]]][[1]] + datain[[i]][[chrsini[[j]]]][[1]]
-        datain[[nreps]][[chrsini[[j]]]][[2]] <- datain[[nreps]][[chrsini[[j]]]][[2]] + datain[[i]][[chrsini[[j]]]][[2]]
-      } else {
-        chrsinbkgd <- c(chrsinbkgd,chrsini[[j]])
-        #print(paste("chrsinbkgd",chrsinbkgd))
-        datain[[nreps]][[chrsini[[j]]]][[1]] <- datain[[i]][[chrsini[[j]]]][[1]]
-        datain[[nreps]][[chrsini[[j]]]][[2]] <- datain[[i]][[chrsini[[j]]]][[2]]
-      }
-    }
-  }
-}
+#
+#xcorr = list()
+#if(numdup-nreps > 0)
+#{
+#  chrsinbkgd <- names(datain[[nreps]])
+#  for (i in (nreps+1):numdup)#nreps would be the first background file, the one the others will be added to
+#  {
+#    chrsini <- names(datain[[i]])
+#    for (j in 1:length(datain[[i]]))
+#    {
+#      if (chrsini[[j]] %in% chrsinbkgd){
+#        datain[[nreps]][[chrsini[[j]]]][[1]] <- datain[[nreps]][[chrsini[[j]]]][[1]] + datain[[i]][[chrsini[[j]]]][[1]]
+#        datain[[nreps]][[chrsini[[j]]]][[2]] <- datain[[nreps]][[chrsini[[j]]]][[2]] + datain[[i]][[chrsini[[j]]]][[2]]
+#      } else {
+#        chrsinbkgd <- c(chrsinbkgd,chrsini[[j]])
+#        #print(paste("chrsinbkgd",chrsinbkgd))
+#        datain[[nreps]][[chrsini[[j]]]][[1]] <- datain[[i]][[chrsini[[j]]]][[1]]
+#        datain[[nreps]][[chrsini[[j]]]][[2]] <- datain[[i]][[chrsini[[j]]]][[2]]
+#      }
+#    }
+#  }
+#}
 
 #print(paste("size allocated datain",object.size(datain)))
 
-cat("\n","Starting xcorr calculation: ",nreps," files")
-for (i in 1:nreps)
-{
-  xcorr[[i]] <- list()
-  cnames <- names(datain[[i]])
-  cat("\n","File",i,"with",length(cnames),"elements","\n")
-  xcorr[[i]] = mclapply(datain[[i]], xc, cornum = cornum, presched = presched)
-}
-#=======================> DONE! 
+#cat("\n","Starting xcorr calculation: ",nreps," files")
+#for (i in 1:nreps)
+#{
+#  xcorr[[i]] <- list()
+#  cnames <- names(datain[[i]])
+#  cat("\n","File",i,"with",length(cnames),"elements","\n")
+#  xcorr[[i]] = mclapply(datain[[i]], xc, cornum = cornum, presched = presched)
+#}
+##=======================> DONE! 
 
 
 # ===================== 
 # Write result to File
 # =====================
-for (i in 1:length(xcorr)) {
-  bamname=ibam[i]
-  filename = strsplit(ibam[i], "/", fixed = TRUE)[[1]]
-  filename = filename[length(filename)]
-  filename = substr(filename,1,nchar(filename)-4)
-  if (i == length(xcorr)) {
-    filename = "ctrl"
-  }
-  cnames <- names(datain[[i]])
-  for (element in cnames)
-  {
-    correlation <- xcorr[[i]][[element]]
-    if ((correlation <= 500) && (correlation >= 50)) { #only write this to file if xcorr value was plausible
-      #message(paste0(chromName, ", ", filename, ": Ok!"))
-      message(paste0(element, ", ", filename, ": Ok!"))
-      #write(paste(chromName, xcorr[i], sep = "\t"), file = paste0(storeFile, "/xc.", filename, ".tab"), append = TRUE)
-      write(paste(element, correlation, sep = "\t"), file = paste0(storeFile, "/xc.", filename, ".tab"), append = TRUE)
-    } else {
-      if (correlation) {
-      } else {
-        message(paste0(element, ", ", filename, ": Value Not Used!"))
-      }
-    }
-  }
-  
-}
-rm(datain)
+#for (i in 1:length(xcorr)) {
+#  bamname=ibam[i]
+#  filename = strsplit(ibam[i], "/", fixed = TRUE)[[1]]
+#  filename = filename[length(filename)]
+#  filename = substr(filename,1,nchar(filename)-4)
+#  if (i == length(xcorr)) {
+#    filename = "ctrl"
+#  }
+#  cnames <- names(datain[[i]])
+#  for (element in cnames)
+#  {
+#    correlation <- xcorr[[i]][[element]]
+#    if ((correlation <= 500) && (correlation >= 50)) { #only write this to file if xcorr value was plausible
+#      #message(paste0(chromName, ", ", filename, ": Ok!"))
+#      message(paste0(element, ", ", filename, ": Ok!"))
+#      #write(paste(chromName, xcorr[i], sep = "\t"), file = paste0(storeFile, "/xc.", filename, ".tab"), append = TRUE)
+#      write(paste(element, correlation, sep = "\t"), file = paste0(storeFile, "/xc.", filename, ".tab"), append = TRUE)
+#    } else {
+#      if (correlation) {
+#      } else {
+#        message(paste0(element, ", ", filename, ": Value Not Used!"))
+#      }
+#    }
+#  }
+#  
+#}
+#rm(datain)
 rm(xcorr);gc()
 #=======================> DONE!
 
