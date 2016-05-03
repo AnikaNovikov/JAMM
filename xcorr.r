@@ -442,9 +442,10 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
     store[[j]][[2]]<- 0
     if (length(readlen)>0){
       for (i in 1:length(readlen)){
-        #print(i)
-        store[[j]][[1]]<-store[[j]][[1]]+readlen[[i]][[j]][[1]]
-        store[[j]][[2]]<-store[[j]][[2]]+readlen[[i]][[j]][[2]]
+        if(!is.null(readlen[[i]])){
+          store[[j]][[1]]<-store[[j]][[1]]+readlen[[i]][[j]][[1]]
+          store[[j]][[2]]<-store[[j]][[2]]+readlen[[i]][[j]][[2]]
+        }
       }
     }
   }
