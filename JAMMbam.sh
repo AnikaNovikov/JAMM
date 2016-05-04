@@ -588,7 +588,7 @@ if [ $type == "single" ]; then
 
   	#call the peak calling R script
     #Rscript "$sPath/peakfinder.r" -sfile="$f" -chrcount="$counting" -bednames="$samplelist" -frag="$frag" -bkgd="$bkgdfile" -out="$wdir/peaks.$ran/" -clustnummer="$clustno" -resolution="$resol" -window="$window" -p="$cores" -bin="$binsize" -type="$type" -initModel="$initModel" -windowe="$windowe" -nreps="$nreps" -uniq="$uniq"
-    Rscript "$sPath/peakfinder.r" -sfile="$gsize" -chrcount="$counting" -bednames="$samplelist" -frag="$frag" -bkgd="$bdir" -out="$wdir/peaks.$ran/" -clustnummer="$clustno" -resolution="$resol" -window="$window" -p="$cores" -bin="$binsize" -type="$type" -initModel="$initModel" -windowe="$windowe" -nreps="$nreps" -nbkgd="$nbkgd" -uniq="$uniq" -iindex="$indexlist"
+    Rscript "$sPath/peakfinder.r" -sfile="$gsize" -chrcount="$counting" -ibam="$samplelist" -frag="$frag" -bkgd="$bdir" -out="$wdir/peaks.$ran/" -clustnummer="$clustno" -resolution="$resol" -window="$window" -p="$cores" -bin="$binsize" -type="$type" -initModel="$initModel" -windowe="$windowe" -nreps="$nreps" -nbkgd="$nbkgd" -uniq="$uniq" -iindex="$indexlist"
 	  #counting=$(($counting+1));
     echo "$wdir/peaks.$ran/$chr.peaks.bed"
 	  if [ -s "$wdir/peaks.$ran/$chr.peaks.bed" ]; then

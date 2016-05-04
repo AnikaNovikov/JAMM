@@ -62,22 +62,26 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
   o <- which(filelist==bamfile)
   bamfile <- BamFile(bamfile)
   param <- ScanBamParam()
-  #if(maxChr[o]!=chromName)
-  #{
-  #  warning(paste("The biggest chromosome in the sizefile has no reads, using the biggest chromosome in the bam file:"),maxChr[o])
-  #}
-  #print(bamfile);print(chromSize[o]);print(chromName[o])
-  #alsm <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=TRUE),which=GRanges(maxChr[o],IRanges(1,as.integer(maxSize[o])))))
-  #alsp <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(flag=scanBamFlag(isMinusStrand=FALSE),which=GRanges(maxChr[o],IRanges(1,as.integer(maxSize[o])))))
-  #als <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(maxChr[o],IRanges(1,as.integer(maxSize[o])))))
-  als <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(chromName,IRanges(1,as.integer(chromSize)))))
+  
+  countlist <- makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,ReadChromVector)
+  countlist <- countlist[order(match(countlist,(sort(as.numeric(countlist),decreasing=TRUE))))]
+  als <- list()
+  iterate=0
+  while((!length(als))&&(iterate<length(countlist))){
+    iterate=iterate+1
+    als <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(names(countlist)[[iterate]],IRanges(1,as.integer(countlist[[iterate]])))))
+  }
+  message(paste("Largest chromosome in sample file is",names(countlist)[[iterate]]))
+  
+  #als <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(chromName,IRanges(1,as.integer(chromSize)))))
   
   #print(paste("maxSize[o]",maxSize[o],"maxChr[o]",maxChr[o]))
   
   #if ((!length(alsm)) && (!length(alsp)))
   if (!length(als))
   { 
-    stop(paste("Bins couldn't be calculated: the largest chromosome",chromName,"has no reads!"))
+    #stop(paste("Bins couldn't be calculated: the largest chromosome",chromName,"has no reads!"))
+    stop("Bins couldn't be calculated: No reads on any chromosome in one or multiple sample files!")
   }  
   #alsm <- GRanges(alsm)
   #alsp <- GRanges(alsp)
@@ -91,6 +95,7 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
   als <- resize(als,1)  
 	#readnum = length(alsp)+length(alsm)
   readnum = length(als)
+  maxChromLength <- countlist[[iterate]]
   #print(paste("readnum",readnum))
 	#o = which(filelist == bamfile)
 	readlen = rl[o]
@@ -101,9 +106,9 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
 	#Shimazaki procedure
 	for (i in 1:length(bins)) {
 		#construct the counting breaks vector
-		genomevec = seq(1, chromSize, by = bins[i]);
-		if (max(genomevec) < chromSize) {
-			genomevec = append(genomevec, chromSize);
+		genomevec = seq(1, maxChromLength, by = bins[i]);
+		if (max(genomevec) < maxChromLength) {
+			genomevec = append(genomevec, maxChromLength);
 		}
 
 		#create a vector of read counts
@@ -355,9 +360,10 @@ for (each.arg in args) {
 #Read in variables
 chromosomes = read.table(sFile, header=FALSE)
 chromSize = as.numeric(chromosomes$V2) #chromosome size
-chromSize = max(chromSize) #get maximum chrom size
-chromName = as.character(chromosomes$V1[[which.max(chromSize)]])
-#rm(chromosomes)
+#chromSize = max(chromSize) #get maximum chrom size
+#chromName = as.character(chromosomes$V1[[which.max(chromSize)]])
+chromName = as.character(chromosomes$V1)
+rm(chromosomes)
 #####
 ReadChromVector <- chromName
 
@@ -415,5 +421,5 @@ write(paste0(bins), file = paste0(storeFile, "/binsize.txt"))
 #print(paste("storefile is",storeFile,"/binsize.txt"))
 #message(bins)
 #message(paste0("Binsize: ",bins,", largest chromosome ",maxChr))
-message(paste0("Binsize: ",bins,", largest chromosome ",chromName))
+message(paste0("Binsize: ",bins))
 #=======================> DONE!
