@@ -584,17 +584,27 @@ if [ $type == "single" ]; then
     echo "type is $type"
     echo "initModel is $initModel"
     echo "windowe is $windowe"
+    echo "nbkgd is $nbkgd"
     #####take care of all the variables (changing with chromosome)
 
   	#call the peak calling R script
     #Rscript "$sPath/peakfinder.r" -sfile="$f" -chrcount="$counting" -bednames="$samplelist" -frag="$frag" -bkgd="$bkgdfile" -out="$wdir/peaks.$ran/" -clustnummer="$clustno" -resolution="$resol" -window="$window" -p="$cores" -bin="$binsize" -type="$type" -initModel="$initModel" -windowe="$windowe" -nreps="$nreps" -uniq="$uniq"
     Rscript "$sPath/peakfinder.r" -sfile="$gsize" -chrcount="$counting" -ibam="$samplelist" -frag="$frag" -bkgd="$bdir" -out="$wdir/peaks.$ran/" -clustnummer="$clustno" -resolution="$resol" -window="$window" -p="$cores" -bin="$binsize" -type="$type" -initModel="$initModel" -windowe="$windowe" -nreps="$nreps" -nbkgd="$nbkgd" -uniq="$uniq" -iindex="$indexlist"
 	  #counting=$(($counting+1));
-    echo "$wdir/peaks.$ran/$chr.peaks.bed"
-	  if [ -s "$wdir/peaks.$ran/$chr.peaks.bed" ]; then
-		  cp "$wdir/peaks.$ran/$chr.peaks.bed" "$out/peaks/$chr.peaks.bed"
-		  rm "$wdir/peaks.$ran/$chr.peaks.bed"
-	  fi
+##########continue here
+  for s in $wdir/peaks.$ran/*.peaks.bed; do
+    file=$(basename $s)
+#    chromname=$(echo -n $file | head -c -10);
+    echo "file $file s $s"
+    cp "$s" "$out/peaks/$file"
+	  rm "$s"
+  done;
+
+#    echo "$wdir/peaks.$ran/$chr.peaks.bed"
+#	  if [ -s "$wdir/peaks.$ran/$chr.peaks.bed" ]; then
+#		  cp "$wdir/peaks.$ran/$chr.peaks.bed" "$out/peaks/$chr.peaks.bed"
+#		  rm "$wdir/peaks.$ran/$chr.peaks.bed"
+#	  fi
   #done
   counting=1;
 fi
@@ -662,7 +672,7 @@ if [[ -s  $out/peaks/all.narrowPeak ]]; then
 	cut -f1-10 $out/peaks/all.narrowPeak | awk -F"\t" -v j=0 '$7 > j' | sort -nr -k7 > $out/peaks/all.peaks.narrowPeak
 	rm $out/peaks/all.narrowPeak
 	rm $out/peaks/*.bed
-	rm $out/peaks/min.peaksize
+#	rm $out/peaks/min.peaksize
 else
 	printf "\nNo Peaks Found!"
 fi

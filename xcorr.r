@@ -202,7 +202,7 @@ makeCountList <- function(actlevels, userlevels, userlevellength, binchromv)
     userlevellength <- userlevellength[which(!is.na(temp))]
     temp <- Filter(Negate(function(x) is.na(unlist(x))), temp)
     if(any(is.na(temp))){
-      warning("There are less chromosomes in the bam file than the sizes file indicates")
+      message(paste("There are less chromosomes in the bam file than the sizes file indicates"))
     }
   }
   newbinchromv <- binchromv[order(temp)]
@@ -256,6 +256,11 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
       #cornum in mclapply
     } else {
       alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched)
+      if(all(is.na(alsf))){
+        countlist[[chromname]] <- NULL
+        message(paste("Chromosome",chromname,"is in background, but in neither of the sample files"))
+        return(NULL)
+      }
       als <- c(alsf,als)
     }
   } else {
@@ -344,7 +349,7 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
     filename = strsplit(ibam[i], "/", fixed = TRUE)[[1]]
     filename = filename[length(filename)]
     filename = substr(filename,1,nchar(filename)-4)
-    if (i == length(xcorr)) {
+    if ((i == length(xcorr)) && (numbkgd != 0)) {
       filename = "ctrl"
     }
     
@@ -433,7 +438,7 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
   names(countlist) <- chromnames
   #print(chromnames)
   store <- list()
-  cat("\n","Counting:",length(chromnames),"elements","\n")
+  cat("\n","xcorr: Counting:",length(chromnames),"elements","\n")
   
   readlen <- mclapply(chromnames,xcorrelation,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd, ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex,mc.cores=cornum,mc.preschedule=presched)
   #print(readlen)

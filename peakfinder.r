@@ -620,7 +620,7 @@ initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnu
 #find peaks
 findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als, noise, startlist, meanAdjust, clustnummer) {
 	
-		
+	#print(winStart)
 	plz = which(startlist == winStart)
 	winEnd = coffeeshopSud[plz]
 	
@@ -774,6 +774,7 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 					will2k = wilcox.test(signal, Cs[(bound[w]):(bound[w+1])])
 										
 					weil = warum * 9
+          print(paste("weil is",weil))
 					#Is there signal in the region above background
 					if (gm > 0) {
 						writethis[[1+weil]] = pStart
@@ -852,11 +853,17 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   als <- NA
   if(!is.na(ibkgd)){
     als <- mclapply(ibkgd,readdata,chromname,chromlength,kpduplicates,indexfile=ibkgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
-    if(is.na(als)) {
+    if(all(is.na(als))) {
       countlist[[chromname]] <- NULL
       return(NULL)
     } else {
       alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
+      #print(alsf)
+      if(all(is.na(alsf))){
+        countlist[[chromname]] <- NULL
+        message(paste("Chromosome",chromname,"is in background, but in neither of the sample files"))
+        return(NULL)
+      }
       als <- c(alsf,als)
     }
   } else {
@@ -1078,13 +1085,13 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   coffeeshop[coffeeshop != numdup] = 0
   
   if (sum(coffeeshop) != 0) { #Any enriched bins?
-    print("1 is true")
+    #print("1 is true")
     coffeeshop = c(0, diff(coffeeshop))
     coffeeshop = cbind(coffeeshop, bins)
     coffeeshopNord = coffeeshop[coffeeshop[,1] == numdup,,drop=FALSE]
     coffeeshopSud = coffeeshop[coffeeshop[,1] == -numdup,,drop=FALSE]
     if (nrow(coffeeshopNord) != 0) { #Any enriched bins?
-      print("2's true")
+      #print("2's true")
       coffeeshopNord = coffeeshopNord[,2]
       coffeeshopSud = coffeeshopSud[,2] - 1
       if (length(coffeeshopSud) < length(coffeeshopNord)) {
@@ -1109,7 +1116,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         coffeeshop = coffeeshop[order(coffeeshop[,3], decreasing = TRUE),]
       }
       rm(bins)
-      print("Nach enriched windows")
+      #print("Nach enriched windows")
       #=======================> DONE!
     
     
@@ -1141,7 +1148,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         set.seed(samplingSeed)
         noise = rnorm(100000, mean=0, sd=0.1)
         param = initparam(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnummer, modelnames, noise)
-        print("Clustering parameters")
+        #print("Clustering parameters")
         #=======================> DONE!
         
         
@@ -1186,7 +1193,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
             }
           }
         } else { cutthisW = 1 }
-        print("Enriched window filtering")
+        #print("Enriched window filtering")
         #=======================> DONE!
         
         
@@ -1205,7 +1212,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
           }
           if (!(is.null(peaks))) { #any peaks discovered?
             writethis = processPeaks(peaks)
-            print("Finding peaks")
+            #print("Finding peaks")
             #=======================> DONE!
             
             
@@ -1249,6 +1256,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   starting <<- FALSE
   print("end")
   #=======================> DONE!
+  #file is: /tmp/tmp.scsJTrG91U/peaks.16973//chr2.peaks.bed
 
 }
   
@@ -1530,7 +1538,10 @@ for (each.arg in args) {
 	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
 	  if (! is.na(arg.split[2]) ) {
 	    nbkgd <- as.numeric(arg.split[2])
-	  } 
+	  }
+    else {
+      nbkgd <- 0
+    }
 	}
 }
 
