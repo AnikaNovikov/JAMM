@@ -66,7 +66,6 @@ ibam = NA #input bam file
 sFile = NA # chromosome size
 storeFile = NA # file to store result
 ReadChromVector = NA
-#gcinfo(TRUE)
 
 for (each.arg in args) {
 	if (grepl('^-s=',each.arg)) {			
@@ -149,7 +148,7 @@ numbkgd = numdup - nreps
 if (bkgd != "None") {
 	nreps = nreps + 1
 }
-#starting = TRUE
+
 #####in case of error use default readlength in bincalculator
 
 #=======================> DONE! 
@@ -241,19 +240,15 @@ normalize <- function (vector)
 
 xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreference, ifrgd, ifrgdindex,ibkgd,ibkgdindex)
 {
-  #print(paste("Starting is",starting))
   chromlength <- as.integer(countlist[[chromname]])
   curnum = which(chromreference == chromname)
   cat(paste0(chromname,", ",curnum,"; "))
   als <- NA
   if(!is.na(ibkgd)){
     als <- mclapply(ibkgd,readdata,chromname,chromlength,kpduplicates,indexfile=ibkgdindex,mc.cores=cornum,mc.preschedule=presched)
-    #print(head(als))
     if(all(is.na(als))) {
       countlist[[chromname]] <- NULL
       return(NULL)
-      #return something
-      #cornum in mclapply
     } else {
       alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched)
       if(all(is.na(alsf))){
@@ -276,15 +271,12 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
   } else {
     readlenchr <- mclapply(als,getreadleninfo,mc.cores=cornum,mc.preschedule=presched)
   }
-  #print(readlenchr)
   for(i in 1:length(als)){
-    #print(i)
     alsm<-NA;alsp<-NA;alscur<-NA;readstarts<-NA;breaks<-NA;curvector<-NA
     alscur <- als[[i]]
     if(is.na(alscur)){
       next()
     }
-    #print(alscur)
     alsm <- resize(alscur[[1]],1)
     alsp <- resize(alscur[[2]],1)
     readstarts <- list(start(ranges(alsp)),start(ranges(alsm)))
@@ -292,13 +284,8 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
     if (max(breaks) < chromlength) {
       breaks = c(breaks, chromlength);
     }
-    #print(head(breaks))
-    #print(head(readstarts[[1]]))
     curvector <- list()
     curvector <- mclapply(readstarts, counthelp, breaks=breaks, mc.cores=cornum, mc.preschedule=presched)
-    #print(paste("Summe curvector 1, 2",sum(curvector[[1]]),sum(curvector[[2]])))
-    #normalize the read counts
-    #curvector <- lapply(curvector,normalize)
     names(curvector) <- c("+","-")
     ################COMMENT FROM ANIKA############
     ## in this case there would be reads, but none of them would match the chromosome length, right?
@@ -306,9 +293,7 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
     ###############################################
     if ((all(curvector[[1]] == 0)||is.na(curvector[[1]])) && (all(curvector[[2]] == 0))||is.na(curvector[[2]])) {
       message(paste0(chromname, ", Warning: Read alignments do not match chromosome length in one or more replicates, Skipped!"))
-      #quit()
       countlist[[chromname]]<-NULL
-      #return(countlist,NA,NA)
       return(NULL)
     }
     als[[i]] <- curvector
@@ -322,7 +307,6 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
   # ==================
   
   xcorr = list()
-  #print(als)
   if(length(ibkgd) > 1) {
     for (i in ((length(ifrgd)+2):length(als))) {
       als[[(length(ifrgd)+1)]][[1]] <- als[[(length(ifrgd)+1)]][[1]] + als[[i]][[1]]
@@ -334,12 +318,10 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
   cat("\n","Starting xcorr calculation: ",length(als)," files")
   xcorr = mclapply(als, xc, mc.cores = cornum, mc.preschedule = presched)
   print(paste("Object als size:",format(object.size(als), units = "Mb")))
-  #print(paste("Objekt xcorr Groesse:",object.size(xcorr, units="Gb")))
   print(paste("Object xcorr size:",format(object.size(xcorr), units = "Mb")))
   #=======================> DONE! 
   
-  ##########
-  #starting <<- FALSE
+  
   
   # ===================== 
   # Write result to File
@@ -377,7 +359,6 @@ getreadleninfo <- function(als){
   rm(alsm,alsp)
   gc()
   return(c(len,sum(result)))
-  #store <- store+c(len,sum(result))
 }
 
 readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexfile) 
@@ -429,22 +410,17 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
   for (i in 1:(length(ibam))){
     bamfile <- BamFile(ibam[i])
     countlist <- c(countlist,makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,RCV))
-    chromnames <- names(countlist)
-    #print(i)    
-    
+    chromnames <- names(countlist)    
   }
   countlist<-unique(countlist)
   chromnames <- unique(chromnames)
   names(countlist) <- chromnames
-  #print(chromnames)
   store <- list()
   cat("\n","xcorr: Counting:",length(chromnames),"elements","\n")
   
   readlen <- mclapply(chromnames,xcorrelation,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd, ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex,mc.cores=cornum,mc.preschedule=presched)
-  #print(readlen)
   length(store)<-length(ifrgd)
   for (j in 1:length(ifrgd)){
-    #print(j)
     store[[j]] <- 0
     length(store[[j]])<-2
     store[[j]][[1]]<- 0
@@ -458,15 +434,13 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
       }
     }
   }
-  #print(store)
   rl <- mclapply(store,calculateAverageReadLength,mc.cores=cornum,mc.preschedule=presched)
   print(rl)
   for (i in 1:length(ifrgd)){
     bamname <- ibam[[i]]
     filename = strsplit(bamname, "/", fixed = TRUE)[[1]]
     filename = filename[length(filename)]
-    filename = substr(filename,1,nchar(filename)-4)
-    
+    filename = substr(filename,1,nchar(filename)-4)    
     write(paste(bamname, rl[[i]], sep= ","), file = paste0(storeFile, "/xc.rl.", filename, ".tab"), append = TRUE)
   }
 }
@@ -492,9 +466,9 @@ xc = function(countlist) {
 	}
 }
 
+
 iterateoverchromosomes(ibam=ibam, iindex=iindex, kpduplicates=FALSE,RCV=ReadChromVector,numbkgd=numbkgd)
 
-#####what if default fragment length, this should work as well
 
 
 rm(xcorr);gc()

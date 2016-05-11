@@ -63,7 +63,6 @@ score <- function(x){
 fixnpf = function(bedfile) {
 
 	writethis = read.table(bedfile, header=FALSE)
-  print(writethis)
 	
 	message(paste0("Minimum Peak Width Used to Produce Filtered List: ", writethis$V11[1]))
 	writethis$V9 = p.adjust(writethis$V8, method = "BH")

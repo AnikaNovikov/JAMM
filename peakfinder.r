@@ -618,7 +618,7 @@ initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnu
 
 
 #find peaks
-findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als, noise, startlist, meanAdjust, clustnummer) {
+findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als, noise, startlist, meanAdjust, clustnummer, chromname) {
 	
 	#print(winStart)
 	plz = which(startlist == winStart)
@@ -774,12 +774,12 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 					will2k = wilcox.test(signal, Cs[(bound[w]):(bound[w+1])])
 										
 					weil = warum * 9
-          print(paste("weil is",weil))
+          #print(paste("weil is",weil))
 					#Is there signal in the region above background
 					if (gm > 0) {
 						writethis[[1+weil]] = pStart
 						writethis[[2+weil]] = pEnd
-						writethis[[3+weil]] = paste0(chromName, ".", pStart)
+						writethis[[3+weil]] = paste0(chromname, ".", pStart)
 						#writethis[[3+weil]] = paste0(element, ".", pStart)
 						writethis[[4+weil]] = "1000"
 						writethis[[5+weil]] = "."
@@ -842,15 +842,15 @@ processPeaks = function(peaks) {
 	return(peaks)
 }
 
-
+#takes one chromosome, counts, calls peaks on it
 peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference,ifrgd,ifrgdindex,ibkgd,ibkgdindex,frags,bins)
 {
-  #print(paste("Starting is",starting))
+  ptm <- proc.time()
   chromlength <- as.integer(countlist[[chromname]])
-  #print(chromlength)
   curnum = which(chromreference == chromname)
   cat(paste0(chromname,", ",curnum,"; "))
   als <- NA
+  #read in read information from background. If chromosome is not in background, it won't be considered for peakcalling
   if(!is.na(ibkgd)){
     als <- mclapply(ibkgd,readdata,chromname,chromlength,kpduplicates,indexfile=ibkgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
     if(all(is.na(als))) {
@@ -858,14 +858,15 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       return(NULL)
     } else {
       alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
-      #print(alsf)
       if(all(is.na(alsf))){
         countlist[[chromname]] <- NULL
         message(paste("Chromosome",chromname,"is in background, but in neither of the sample files"))
         return(NULL)
       }
+      #contains read information from all sample and background files
       als <- c(alsf,als)
     }
+    #without background: read all sample file information for that chromosome
   } else {
     als <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
     if(is.na(als)) {
@@ -873,7 +874,11 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       return(NULL)
     }
   }
+  print("Time til reading in data")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   
+  #count reads for every file seperately
   for(i in 1:length(als)){
     alscur<-NA;curvector<-NA
     alscur <- als[[i]]
@@ -886,7 +891,6 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     } else {
       FragLength <- frags[[i]]
     }
-    #print("Fragmentlength zugewiesen")
     
     alscur <- resizetorange(als=alscur,FragLength,chromlength)
     
@@ -918,23 +922,14 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     if(length(curvector) < chromlength){
       curvector[(length(curvector)+1):chromlength] <- 0
     }
-    #curvector[is.na(curvector)] <- 0
-    #print(curvector[1:300])
-    #print(curvector[90832251:90832300])
-    #print(length(curvector))
-    #print(paste("is it na or not",is.na(curvector[[90832300]])))
-    #normalize the read counts
     rm(reslist,st,en)
     gc()
-    
+    #normalize counts
     mCount = mean(curvector)
-    ##########
     if (curnum==1 || starting) {
       curvector = curvector/mCount
       write(paste(mCount), file = paste0(out, "/norma.", i, ".info"))
     } else {
-      #print(paste("file is",out,"/norma.",i,".info"))
-      #print(paste("counts",as.numeric(read.table(paste0(out, "/norma.", i, ".info"))[[1]])))
       meanCounts = mean(as.numeric(read.table(paste0(out, "/norma.", i, ".info"))[[1]]))
       if ((mCount >  (5*meanCounts)) || (mCount <  (0.2*meanCounts))) {
         mCount = meanCounts
@@ -944,7 +939,6 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       curvector = curvector/mCount
     }
     als[[i]] <- curvector
-    #print(curvector[90832251:90832300])
     rm(curvector,alscur,curvector)
     gc()
   }
@@ -954,11 +948,12 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   if(length(ibkgd) > 1) {
     for (i in ((length(ifrgd)+2):length(als))) {
       als[[(length(ifrgd)+1)]] <- als[[(length(ifrgd)+1)]] + als[[i]]
-#      als[[(length(ifrgd)+1)]][[2]] <- als[[(length(ifrgd)+1)]][[2]] + als[[i]][[2]]
     }
     als[(length(ifrgd)+2):length(als)] <- NULL
   }
-  
+  print("Time til counting reads")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   
   # ======================= 
   # Some preliminary stuff
@@ -969,51 +964,24 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   
   #make bins vector
   bins = seq(from = 1, to = (chromlength - 1), by = binSize)
-  #seq2 <- Vectorize(seq.default, vectorize.args = c("from", "to"))
-  #bins = seq2(from = 1, to = (chromSize - 1), by = binSize)
-  #numdup=length(als)
   numdup=nreps
-  #print(bins[[1]]);print(bins[[20]])
   #=======================> DONE!
   
-#  rm(datain)
-#  cat("\n","Starting xcorr calculation: ",length(als)," files")
-#  xcorr = mclapply(als, xc, mc.cores = cornum, mc.preschedule = presched)
-#  print(paste("Object als size:",format(object.size(als), units = "Mb")))
-  
-  
+  print("Time til preliminary stuff")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
 
   cat("\n","Calling peaks of chromosome",chromname)
   if (curnum == 1 || starting) {
     write(paste(samplingSeed), file = paste0(out, "/seed.info"))
   } else {
     samplingSeed = as.numeric(read.table(paste0(out, "/seed.info"), header = FALSE)[[1]])
-  }
-
-# counts=list()
-# for (i in 1:length(als))
-# {
-#   counts[[i]]=als[[i]][[element]]
-# }
-# print(paste("sum counts",sum(counts[[1]]),sum(counts[[2]]),sum(counts[[3]])))
-
-##########
-  #print("here")
-  #print(als[[length(als)]][90832251:90832300])
-  #print(als[[1]][90832251:90832300])
-  #for (x in 1:(length(als))){
-  #  if(any(is.na(als[[x]]))){
-  #    print("There is NA in als")
-  #    print(x)
-  #  }
-  #}
-  
+  }  
 
   # ============================ 
   # Estimating Background Model
   # ============================ 
   if (curnum == 1 || starting){ #first chromosome, estimate bkgd (includes SNR cutoff)
-    #print("I estimate the background model")
     if (is.na(cutoff)) {
       if (bkgd != "None") {
         cutoff = vector(length = numdup)
@@ -1035,7 +1003,6 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         C = rlnorm(100000, mu, sqrt(sigma))
         for (x in 1:numdup) {
           cutoff[x] = (mean(als[[x]]))/(sd(C))
-          print(paste("cutoff x",cutoff[x]))
         }
         cutoff = max(cutoff)
         set.seed(samplingSeed)
@@ -1065,7 +1032,9 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       dCs = sd(snow)
     }
   }
-  #print("estimated background model")
+  print("Time til estimated background model")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   #=======================> DONE!
   
   
@@ -1085,13 +1054,11 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   coffeeshop[coffeeshop != numdup] = 0
   
   if (sum(coffeeshop) != 0) { #Any enriched bins?
-    #print("1 is true")
     coffeeshop = c(0, diff(coffeeshop))
     coffeeshop = cbind(coffeeshop, bins)
     coffeeshopNord = coffeeshop[coffeeshop[,1] == numdup,,drop=FALSE]
     coffeeshopSud = coffeeshop[coffeeshop[,1] == -numdup,,drop=FALSE]
     if (nrow(coffeeshopNord) != 0) { #Any enriched bins?
-      #print("2's true")
       coffeeshopNord = coffeeshopNord[,2]
       coffeeshopSud = coffeeshopSud[,2] - 1
       if (length(coffeeshopSud) < length(coffeeshopNord)) {
@@ -1116,7 +1083,9 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         coffeeshop = coffeeshop[order(coffeeshop[,3], decreasing = TRUE),]
       }
       rm(bins)
-      #print("Nach enriched windows")
+      print("Time til picking enriched bins")
+      print(proc.time()-ptm)
+      ptm <- proc.time()
       #=======================> DONE!
     
     
@@ -1148,7 +1117,9 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         set.seed(samplingSeed)
         noise = rnorm(100000, mean=0, sd=0.1)
         param = initparam(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnummer, modelnames, noise)
-        #print("Clustering parameters")
+        print("Time til clustering parameters")
+        print(proc.time()-ptm)
+        ptm <- proc.time()
         #=======================> DONE!
         
         
@@ -1193,7 +1164,9 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
             }
           }
         } else { cutthisW = 1 }
-        #print("Enriched window filtering")
+        print("Time til enriched window filtering")
+        print(proc.time()-ptm)
+        ptm <- proc.time()
         #=======================> DONE!
         
         
@@ -1206,13 +1179,15 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         if (nrow(coffeeshop) > 0) { #any enriched windows left after filtering?
           coffeeshop = cbind(coffeeshop[,1], coffeeshop[,2])
           if (cornum > 1) {
-            peaks = mclapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgd, resol, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummer, mc.cores = cornum, mc.preschedule = presched)
+            peaks = mclapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgd, resol, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummer, chromname=chromname,mc.cores = cornum, mc.preschedule = presched)
           } else {
-            peaks = lapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgd, resol, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummer)
+            peaks = lapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgd, resol, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummer, chromname=chromname)
           }
           if (!(is.null(peaks))) { #any peaks discovered?
             writethis = processPeaks(peaks)
-            #print("Finding peaks")
+            print("Time til finding peaks")
+            print(proc.time()-ptm)
+            ptm <- proc.time()
             #=======================> DONE!
             
             
@@ -1230,10 +1205,8 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   
   if (isTRUE(nothing)) {
     file.create(paste0(out, "/", chromname, ".peaks.bed"))
-    #file.create(paste0(out, "/", element, ".peaks.bed"))
     print(paste0("file is: ",out, "/", chromname, ".peaks.bed"))
     write(paste(chromname, minpeak, sep = "  "), file = paste0(out, "/min.peaksize"), append=TRUE)
-    #write(paste(element, minpeak, sep = "  "), file = paste0(out, "/min.peaksize"), append=TRUE)
     
     if (curnum == 1 || starting) {
       message(paste0("No peaks found! - Window Fold Enrichment: ", cutthisW, " - Seed: ", samplingSeed))
@@ -1242,9 +1215,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     }
   } else {
     write(paste(chromname, writethis$X1, writethis$X2, writethis$X3, writethis$X4, writethis$X5, writethis$X6, writethis$X7, writethis$X8, writethis$X9, minpeak, sep = "	"), file = paste0(out, "/", chromname, ".peaks.bed"), ncolumns = 1)
-    #write(paste(element, writethis$X1, writethis$X2, writethis$X3, writethis$X4, writethis$X5, writethis$X6, writethis$X7, writethis$X8, writethis$X9, minpeak, sep = "  "), file = paste0(out, "/", element, ".peaks.bed"), ncolumns = 1)
     write(paste(chromname, minpeak, sep = "	"), file = paste0(out, "/min.peaksize"), append=TRUE)
-    #write(paste(element, minpeak, sep = "  "), file = paste0(out, "/min.peaksize"), append=TRUE)
     
     
     if (curnum == 1 || starting) {
@@ -1254,18 +1225,16 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     }
   }
   starting <<- FALSE
-  print("end")
+  print("Time til writing peak information")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   #=======================> DONE!
-  #file is: /tmp/tmp.scsJTrG91U/peaks.16973//chr2.peaks.bed
 
 }
   
 resizetorange <- function(als,FragLength,chromlength){
-  #print(FragLength)
-  #print(als)
-  #extends/truncates reads to user specified length and deletes the ones that don't match chromosome size anymore
+  #extends/truncates reads to fragment length and deletes the ones that don't match chromosome size anymore
   als <- resize(als, FragLength)
-  #print(paste("FragLength is",FragLength))
   starts<-start(ranges(als));ends<-end(ranges(als));seqnames<-as.character(seqnames(als));strands<-as.character(strand(als))
   als <- mapply(removeOutOfRangeReads,starts,ends,seqnames,strands,chromlength)
   unl <- unlist(als)
@@ -1277,6 +1246,7 @@ resizetorange <- function(als,FragLength,chromlength){
   return(als)
 }
 
+#only keeps reads that don't lie behind end of chromosome or before 0
 removeOutOfRangeReads <- function(start,end,seqname,strand,chromlength)
 {
   if (start>0 && end<=chromlength) 
@@ -1285,6 +1255,7 @@ removeOutOfRangeReads <- function(start,end,seqname,strand,chromlength)
     return (output) 
   }
 }
+
 
 readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexfile, curnum)
 {
@@ -1299,6 +1270,8 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
   ## I don't know the maximum coordinate. But for some reason this number here is the biggest that readGAlignments allows. If I go even one number higher, I get an error.
   ## So that's because of the package used.
   #################################################
+  
+  #are there reads after the chromosome end? If yes length information probably doesn't fit file
   alsover <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(chromname,IRanges(as.integer(chromlength),536870912))))
   if(!!length(alsover)){
     message("Warning: Chromosome ",chromname,"has reads beyond chromosome length!")
@@ -1306,7 +1279,6 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
       message("ERROR: The first chromosome in the analysis was skipped. I can not calculate normalization factors. You can either delete this chromosome from your chromosome size file or fix the previous warning!")
       quit(status=1)
     } else {
-      #quit()
       return(NA)
     }
   }
@@ -1324,9 +1296,11 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
   return(als)
 }
 
-
+#iterates over all different chromosomes existing in all files
 iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadChromVector, nbkgd,bins)
-{ 
+{
+  ptm <- proc.time()
+  #store background and sample files and their index files in different variables
   if(nbkgd!=0)
   {
     ibkgd <- ibam[(length(ibam)-nbkgd+1):length(ibam)]
@@ -1340,8 +1314,8 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
     ibkgd <- NA
     ibkgdindex <- NA
   }
+  #collect all different chromosomes from all the files
   countlist <- list()
-  #print(ibam)
   for (i in 1:(length(ibam))){
     bamfile <- BamFile(ibam[[i]])
     countlist <- c(countlist,makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,RCV))
@@ -1352,30 +1326,10 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
   names(countlist) <- chromnames
   store <- list()
   cat("\n","Counting:",length(chromnames),"elements","\n")
-  #readlen <- mclapply(chromnames,peakfindermain,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd,ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex,mc.cores=cornum,mc.preschedule=presched,frag=frag)
+  print("Time til calling peakfindermain")
+  print(proc.time()-ptm)
   dummy <- mclapply(chromnames,peakfindermain,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd,ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex,mc.cores=cornum,mc.preschedule=presched,frags=frags,bins=bins)
-  
-  
-  #####
-#    counts=callCountReads(cornum,type,bamfiles=ibkgd,index=ibkgdindex,reads=datain,frag=frags,chromsize=chromSize,filelist=readsFiles,chrcount=chrcount,kpduplicates=uniq,RCV=ReadChromVector)
-#    if(!length(counts[[1]])){
-#      quit()
-#    }
-#    for (i in 1:length(counts)) 
-#    {
-#      areinbkgd <- unique(c(areinbkgd,names(counts[[i]])))
-#    }
-#    countsf=callCountReads(cornum,type,bamfiles=ifrgd,index=ifrgdindex,reads=datain,frag=frags,chromsize=chromSize,filelist=readsFiles,chrcount=chrcount,kpduplicates=uniq,RCV=as.character(areinbkgd))
-#    counts = c(countsf,counts)
-#  } else {
-#    counts = callCountReads(cornum,type,bamfiles=readsFiles,index=iindex,reads=datain,frag=frags,chromsize=chromSize,filelist=readsFiles,chrcount=chrcount,kpduplicates=uniq,RCV=ReadChromVector)
-#  }
-  
-  
-  
-  
 }
-
 
 #=======================> DONE!
 
@@ -1473,13 +1427,6 @@ for (each.arg in args) {
 			type <- arg.split[2]
 		} 
 	}
-#	#chromosome number
-#	if (grepl('-chrcount=',each.arg)) {
-#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-#		if (! is.na(arg.split[2]) ) {
-#			chrcount <- as.numeric(arg.split[2])
-#		} 
-#	}
 	#bed file names
 	if (grepl('-ibam=',each.arg)) {
 		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
@@ -1522,7 +1469,6 @@ for (each.arg in args) {
 	    } else {
 	      uniq=FALSE
 	    }
-	    #print(paste("uniq",uniq))
 	  } 
 	}
 	#number of replicates
