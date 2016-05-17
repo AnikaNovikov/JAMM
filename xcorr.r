@@ -240,6 +240,7 @@ normalize <- function (vector)
 
 xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreference, ifrgd, ifrgdindex,ibkgd,ibkgdindex)
 {
+  ptm <- proc.time()
   chromlength <- as.integer(countlist[[chromname]])
   curnum = which(chromreference == chromname)
   cat(paste0(chromname,", ",curnum,"; "))
@@ -265,12 +266,18 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
       return(NULL)
     }
   }
+  print("Time til reading in data")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   readlenchr <- NA
   if (!is.na(ibkgd)) {
     readlenchr <- mclapply(alsf,getreadleninfo,mc.cores=cornum,mc.preschedule=presched)
   } else {
     readlenchr <- mclapply(als,getreadleninfo,mc.cores=cornum,mc.preschedule=presched)
   }
+  print("Time til getting readlength info")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   for(i in 1:length(als)){
     alsm<-NA;alsp<-NA;alscur<-NA;readstarts<-NA;breaks<-NA;curvector<-NA
     alscur <- als[[i]]
@@ -296,10 +303,18 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
       countlist[[chromname]]<-NULL
       return(NULL)
     }
+    print(paste("als no.",i,"len curvector +,-",length(curvector[[1]]),length(curvector[[2]])))
+    print(paste("sum curvector +",sum(curvector[[1]])))
+    print(paste("sum curvector -",sum(curvector[[2]])))
+    print(paste("mean curvector +",mean(curvector[[1]])))
+    print(paste("mean curvector -",mean(curvector[[2]])))
     als[[i]] <- curvector
     rm(alsm,alsp,alscur,readstarts,curvector,breaks)
     gc()
   }
+  print("Time til counting reads of all files")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   gc()
   
   # ================== 
@@ -319,6 +334,9 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
   xcorr = mclapply(als, xc, mc.cores = cornum, mc.preschedule = presched)
   print(paste("Object als size:",format(object.size(als), units = "Mb")))
   print(paste("Object xcorr size:",format(object.size(xcorr), units = "Mb")))
+  print("Time til xcorr calculation")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   #=======================> DONE! 
   
   
@@ -346,6 +364,9 @@ xcorrelation <- function(chromname, countlist, kpduplicates=FALSE, chromreferenc
       }
     }
   }
+  print("Time til writing to file: next bincalculator")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   return(readlenchr)
 }
 

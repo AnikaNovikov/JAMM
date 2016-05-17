@@ -59,6 +59,7 @@ suppressPackageStartupMessages(library("GenomicRanges"))
 #shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, maxChr, maxSize, type) {
 shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
 	#####type paired??
+  ptm <- proc.time()
   o <- which(filelist==bamfile)
   bamfile <- BamFile(bamfile)
   param <- ScanBamParam()
@@ -73,12 +74,15 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
   }
   message(paste("Largest chromosome in sample file is",names(countlist)[[iterate]]))
   
-  if (!length(als))
+  if (!length(als)){
     stop("Bins couldn't be calculated: No reads on any chromosome in one or multiple sample files!")
-  }  
+  }
   als <- GRanges(als)
   als <- unique(als)
-  als <- resize(als,1)  
+  als <- resize(als,1)
+  print("Time til reading, resizing data")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   readnum = length(als)
   maxChromLength <- countlist[[iterate]]
 	readlen = rl[o]
@@ -103,7 +107,10 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
 		}
 		ameirah = hist(ameirah, breaks = genomevec, plot = FALSE)
 		ameirah = ameirah$counts
-		#get cost function
+		print(paste("bins no.",i,"len ameirah",length(ameirah)))
+		print(paste("sum ameirah",sum(ameirah)))
+		print(paste("mean ameirah",mean(ameirah)))
+    #get cost function
 		m = mean(ameirah)
 		v = (sum((ameirah - m)^2)) / (length(ameirah))
 		num = ((2*m) - v)
@@ -113,6 +120,9 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
     ameirah <- NA
     genomevec <- NA
 	}
+  print("Time til calculating costs, bins")
+  print(proc.time()-ptm)
+  ptm <- proc.time()
   als <- NA
   rm(ameirah,genomevec,als);gc()
   index = which.min(costs)
@@ -279,6 +289,7 @@ for (each.arg in args) {
 	}
 }
 
+ptm <- proc.time()
 #Read in variables
 chromosomes = read.table(sFile, header=FALSE)
 chromSize = as.numeric(chromosomes$V2) #chromosome size
@@ -316,6 +327,9 @@ for (i in 1:length(ibam)) {
 	}
 }
 bins = bins[!is.na(bins)]
+print("Time til starting shimazaki")
+print(proc.time()-ptm)
+#ptm <- proc.time()
 bins = mclapply(ibam, shimazaki, iindex, rl, bins, maxIter, ibam, type = type, mc.cores = cornum)
 bins = min(unlist(bins))
 #=======================> DONE! 

@@ -922,6 +922,9 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     if(length(curvector) < chromlength){
       curvector[(length(curvector)+1):chromlength] <- 0
     }
+    print(paste("als no.",i,"len curvector",length(curvector)))
+    print(paste("sum curvector",sum(curvector)))
+    print(paste("mean curvector",mean(curvector)))
     rm(reslist,st,en)
     gc()
     #normalize counts
