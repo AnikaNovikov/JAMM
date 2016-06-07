@@ -27,27 +27,31 @@ options(warn = -1, scipen = 1000) #R will not report any warnings (warn = -1), R
 #=======================> DONE! 
 
 
+if(is.na(bednamesS)){
+  stop("No bed file names")
+}
+
 
 
 # ============================================== 
 # Parsing Arguments (source: phantom SPP script)
 # ============================================== 
-args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
-
-
-#Parsing arguments and storing values
-for (each.arg in args) {
-	#bed file names
-	if (grepl('^-filelist=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
-		if (! is.na(arg.split[2]) ) {
-				bednames <- arg.split[2]
-		} else {
-			stop('No bed file names')
-		} 
-	}
-}
-options(stringsAsFactors = FALSE)
+#args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
+#
+#
+##Parsing arguments and storing values
+#for (each.arg in args) {
+#	#bed file names
+#	if (grepl('^-filelist=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
+#		if (! is.na(arg.split[2]) ) {
+#				bednames <- arg.split[2]
+#		} else {
+#			stop('No bed file names')
+#		} 
+#	}
+#}
+#options(stringsAsFactors = FALSE)
 #=======================> DONE! 
 
 
@@ -105,5 +109,5 @@ fixnpf = function(bedfile) {
 # ==================
 # Fixing narrowpeak
 # ==================
-bedfiles = fixnpf(bednames) #read in all bed files (samples and control)
+bedfiles = fixnpf(bednamesS) #read in all bed files (samples and control)
 #=======================> DONE!

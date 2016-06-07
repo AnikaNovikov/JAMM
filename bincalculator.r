@@ -57,7 +57,7 @@ suppressPackageStartupMessages(library("GenomicRanges"))
 # =================
 #Implements the Shimazaki procedure
 #shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, maxChr, maxSize, type) {
-shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
+shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, typeS) {
 	#####type paired??
   ptm <- proc.time()
   o <- which(filelist==bamfile)
@@ -78,7 +78,8 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
     stop("Bins couldn't be calculated: No reads on any chromosome in one or multiple sample files!")
   }
   als <- GRanges(als)
-  als <- unique(als)
+  ##########making a difference to the original JAMM
+  #als <- unique(als)
   als <- resize(als,1)
   print("Time til reading, resizing data")
   print(proc.time()-ptm)
@@ -99,10 +100,10 @@ shimazaki = function(bamfile, indexfile, rl, bins, maxIter, filelist, type) {
 		}
 
 		#create a vector of read counts
-		if (type == "single") {
+		if (typeS == "single") {
 		  ameirah = sort(c(as.numeric(start(ranges(als)))))
 		}
-		if (type == "paired") {
+		if (typeS == "paired") {
 			ameirah = sort(c((reads[[1]]), (reads[[2]])))
 		}
 		ameirah = hist(ameirah, breaks = genomevec, plot = FALSE)
@@ -189,126 +190,156 @@ makeCountList <- function(actlevels, userlevels, userlevellength, binchromv)
 
 
 
+if (is.na(ibamS)){
+  stop("No sample or input files")
+}
+if (is.na(iindexS)){
+  stop("No index file for one or multiple bam files given")
+}
+if (is.na(sS)){
+  stop("No chromosome size file")
+}
+if (is.na(readlS)){
+  stop("No readlength calculated in xcorr")
+}
+if (is.na(storeFileS)){
+  stop("No file to store result")
+}
+if (is.na(cornumS)){
+  cornumS=1
+}
+if (is.na(fragsS)){
+  stop("No Fragment lengths given")
+}
+if (is.na(typeS)){
+  stop("No type given")
+}
+bins=NA
 
 # ========================== 
 # Parse-in System Variables
 # ==========================
-args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
+#args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
 
 
 #Set arguments to default values
-ibam = NA # input bam file
-iindex = NA #input index file
-sFile = NA # chromosome size
-storeFile = NA # file to store result
-cornum = 1 # number of processors to use
-rl = NA # read length
-frags = NA # fragment lengths
-bins = NA
+#ibam = NA # input bam file
+#iindex = NA #input index file
+#sFile = NA # chromosome size
+#storeFile = NA # file to store result
+#cornum = 1 # number of processors to use
+#rl = NA # read length
+#frags = NA # fragment lengths
+#bins = NA
 
-#Parsing arguments and storing values
-for (each.arg in args) {
-	if (grepl('^-s=',each.arg)) {			
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			sFile <- arg.split[2] 
-		} else {
-			stop('No chromosome size file')
-		}
-	}
-	if (grepl('^-rl=',each.arg)) {			
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			rl <- arg.split[2] 
-		}
-	}
-	if (grepl('^-d=',each.arg)) {			
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			storeFile <- arg.split[2] 
-		} else {
-			stop('No file to store result')
-		}
-	}
-	if (grepl('^-ibam=',each.arg)) {
-	#if (grepl('^-ibed=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			ibam <- arg.split[2]
-		} else {
-			message('ERROR: The largest chromosome in your chromosome size file (-g) has no reads in one or more of your BAM files (-s). I can not calculate the bin size. You can either delete this chromosome from your chromosome size file or specify a bin size using -b parameter!')	
-			quit(status = 1)
-		} 
-	}
-	if (grepl('^-iindex=',each.arg)) {
-	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-	  if (! is.na(arg.split[2]) ) {
-	    iindex <- arg.split[2]
-	  } else {
-      stop('No index file for one or multiple bam files given')
-	  }
-	}
-	if (grepl('^-p=',each.arg)) {			
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			cornum <- as.numeric(arg.split[2]) 
-		} else {
-			stop('No number of cores given')
-		}
-	}
-	if (grepl('^-f=',each.arg)) {			
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			frags <- arg.split[2] 
-		} else {
-			stop('No Fragment lengths given')
-		}
-	}
-	if (grepl('^-type=',each.arg)) {			
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			type <- arg.split[2] 
-		} else {
-			stop('No type given')
-		}
-	}
-	#number of replicates
-	if (grepl('-nreps=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				nreps <- as.numeric(arg.split[2])
-		} 
-	}
-	if (grepl('^-readl=',each.arg)) {
-	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-	  if (! is.na(arg.split[2]) ) {
-	    readl <- arg.split[2] 
-	  } else {
-	    stop('No readlength calculated in xcorr')
-	  }
-	}
-}
+##Parsing arguments and storing values
+#for (each.arg in args) {
+#	if (grepl('^-s=',each.arg)) {			
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			sFile <- arg.split[2] 
+#		} else {
+#			stop('No chromosome size file')
+#		}
+#	}
+#	if (grepl('^-rl=',each.arg)) {			
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			rl <- arg.split[2] 
+#		}
+#	}
+#	if (grepl('^-d=',each.arg)) {			
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			storeFile <- arg.split[2] 
+#		} else {
+#			stop('No file to store result')
+#		}
+#	}
+#	if (grepl('^-ibam=',each.arg)) {
+#	#if (grepl('^-ibed=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			ibam <- arg.split[2]
+#		} else {
+#			message('ERROR: The largest chromosome in your chromosome size file (-g) has no reads in one or more of your BAM files (-s). I can not calculate the bin size. You can either delete this chromosome from your chromosome size file or specify a bin size using -b parameter!')	
+#			quit(status = 1)
+#		} 
+#	}
+#	if (grepl('^-iindex=',each.arg)) {
+#	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#	  if (! is.na(arg.split[2]) ) {
+#	    iindex <- arg.split[2]
+#	  } else {
+#      stop('No index file for one or multiple bam files given')
+#	  }
+#	}
+#	if (grepl('^-p=',each.arg)) {			
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			cornum <- as.numeric(arg.split[2]) 
+#		} else {
+#			stop('No number of cores given')
+#		}
+#	}
+#	if (grepl('^-f=',each.arg)) {			
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			frags <- arg.split[2] 
+#		} else {
+#			stop('No Fragment lengths given')
+#		}
+#	}
+#	if (grepl('^-type=',each.arg)) {			
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			type <- arg.split[2] 
+#		} else {
+#			stop('No type given')
+#		}
+#	}
+#	#number of replicates
+#	if (grepl('-nreps=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				nreps <- as.numeric(arg.split[2])
+#		} 
+#	}
+#	if (grepl('^-readl=',each.arg)) {
+#	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#	  if (! is.na(arg.split[2]) ) {
+#	    readl <- arg.split[2] 
+#	  } else {
+#	    stop('No readlength calculated in xcorr')
+#	  }
+#	}
+#}
 
 ptm <- proc.time()
 #Read in variables
-chromosomes = read.table(sFile, header=FALSE)
+chromosomes = read.table(sS, header=FALSE)
 chromSize = as.numeric(chromosomes$V2) #chromosome size
 chromName = as.character(chromosomes$V1)
 rm(chromosomes)
 ReadChromVector <- chromName
 
-ibam = strsplit(ibam, ",", fixed = TRUE)[[1]]
-iindex = strsplit(ibam, ",", fixed = TRUE)[[1]]
-readl = strsplit(readl, ",", fixed = TRUE)[[1]]
-rlens = readl[c(FALSE,TRUE)]
-rfile = readl[c(TRUE,FALSE)]
-rl <- rlens[order(match(ibam,rfile))]
+#ibamS = strsplit(ibamS, ",", fixed = TRUE)[[1]]
+#iindexS = strsplit(ibamS, ",", fixed = TRUE)[[1]]
+print(readlS)
+readlS = strsplit(readlS, ",", fixed = TRUE)[[1]]
+print(readlS)
+rlens = readlS[c(FALSE,TRUE)]
+print(rlens)
+rfile = readlS[c(TRUE,FALSE)]
+print(rfile)
+rl <- as.numeric(rlens[order(match(ibamS,rfile))])
 
-if (length(ibam) != nreps) {
+if (length(ibamS) != nrepsS) {
 	message('ERROR: The largest chromosome in your chromosome size file (-g) has no reads in one or more of your BED files (-s). I can not calculate the bin size. You can either delete this chromosome from your chromosome size file or specify a bin size using -b parameter. Exiting!')	
 	quit()
 }
-frags = as.numeric(strsplit(frags, ",", fixed = TRUE)[[1]])
+#fragsS = as.numeric(strsplit(fragsS, ",", fixed = TRUE)[[1]])
+fragsS <= as.numeric(fragsS)
 #=======================> DONE! 
 
 
@@ -318,9 +349,11 @@ frags = as.numeric(strsplit(frags, ",", fixed = TRUE)[[1]])
 # Shimazaki Procedure (Shimazaki and Shinomoto 2007)
 # ===================================================
 
-for (i in 1:length(ibam)) {
-	if (frags[i] > rl[i]) {
-		minbin = floor(frags[i] / 2)
+print(paste("Frags are",fragsS))
+print(paste("rls are",rl))
+for (i in 1:length(ibamS)) {
+	if (fragsS[i] > rl[i]) {
+		minbin = floor(fragsS[i] / 2)
 		bins = c(bins, seq(minbin, minbin*15, by = minbin)) 
 	} else {
 		bins = c(bins, defaultBins)
@@ -330,7 +363,7 @@ bins = bins[!is.na(bins)]
 print("Time til starting shimazaki")
 print(proc.time()-ptm)
 #ptm <- proc.time()
-bins = mclapply(ibam, shimazaki, iindex, rl, bins, maxIter, ibam, type = type, mc.cores = cornum)
+bins = mclapply(ibamS, shimazaki, iindexS, rl, bins, maxIter, ibamS, typeS = typeS, mc.cores = cornumS)
 bins = min(unlist(bins))
 #=======================> DONE! 
 
@@ -338,6 +371,6 @@ bins = min(unlist(bins))
 # ================== 
 # Write Information
 # ==================
-write(paste0(bins), file = paste0(storeFile, "/binsize.txt"))
+write(paste0(bins), file = paste0(storeFileS, "/binsize.txt"))
 message(paste0("Binsize: ",bins))
 #=======================> DONE!

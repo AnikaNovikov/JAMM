@@ -19,42 +19,47 @@
 ########################################################################
 
 
+if(is.na(bednamesS)){
+  stop("No bed file names")
+}
+
+
 
 # ============================================== 
 # Parsing Arguments (source: phantom SPP script)
 # ============================================== 
-args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
-
-
-#Parsing arguments and storing values
-for (each.arg in args) {
-  #bed file names
-  if (grepl('^-filelist=',each.arg)) {
-    arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
-    if (! is.na(arg.split[2]) ) {
-      bednames <- arg.split[2]
-    } else {
-      stop('No bed file names')
-    } 
-  }
-  if (grepl('^-dest=',each.arg)) {
-    arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
-    if (! is.na(arg.split[2]) ) {
-      destfile <- arg.split[2]
-    } else {
-      stop()
-    } 
-  }
-  if (grepl('^-abovezero=',each.arg)) {
-    arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
-    if (! is.na(arg.split[2]) ) {
-      abovezerofile <- arg.split[2]
-    } else {
-      stop()
-    } 
-  }
-}
-options(stringsAsFactors = FALSE)
+#args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
+#
+#
+##Parsing arguments and storing values
+#for (each.arg in args) {
+#  #bed file names
+#  if (grepl('^-filelist=',each.arg)) {
+#    arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
+#    if (! is.na(arg.split[2]) ) {
+#      bednames <- arg.split[2]
+#    } else {
+#      stop('No bed file names')
+#    } 
+#  }
+#  if (grepl('^-dest=',each.arg)) {
+#    arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
+#    if (! is.na(arg.split[2]) ) {
+#      destfile <- arg.split[2]
+#    } else {
+#      stop()
+#    } 
+#  }
+#  if (grepl('^-abovezero=',each.arg)) {
+#    arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] # split on =
+#    if (! is.na(arg.split[2]) ) {
+#      abovezerofile <- arg.split[2]
+#    } else {
+#      stop()
+#    } 
+#  }
+#}
+#options(stringsAsFactors = FALSE)
 #=======================> DONE! 
 
 
@@ -95,7 +100,7 @@ writeout = function(bedfile) {
   abovezero=abovezero[ order( -unlist(abovezero[,7])), ]
   #print(head(abovezero))
 #  write(paste(abovezero[1,], abovezero[2,], abovezero[3,], abovezero[4,], abovezero[5,], abovezero[6,], abovezero[7,], abovezero[8,], abovezero[9,], abovezero[10,], sep = "\t"), file = abovezerofile, ncolumns = 1)
-  write(paste(abovezero[,1], abovezero[,2], abovezero[,3], abovezero[,4], abovezero[,5], abovezero[,6], abovezero[,7], abovezero[,8], abovezero[,9], abovezero[,10], sep = "\t"), file = abovezerofile, ncolumns = 1)
+  write(paste(abovezero[,1], abovezero[,2], abovezero[,3], abovezero[,4], abovezero[,5], abovezero[,6], abovezero[,7], abovezero[,8], abovezero[,9], abovezero[,10], sep = "\t"), file = abovezerofileS, ncolumns = 1)
   
   sizes = writethis$V3 - writethis$V2
   #print(head(sizes))
@@ -111,7 +116,7 @@ writeout = function(bedfile) {
     writethis<-writethis[,-delcol]
   }
   writethis=writethis[ ,order( -unlist(writethis[7,])) ]
-  write(paste(writethis[1,], writethis[2,], writethis[3,], writethis[4,], writethis[5,], writethis[6,], writethis[7,], writethis[8,], writethis[9,], writethis[10,], sep = "\t"), file = destfile, ncolumns = 1)
+  write(paste(writethis[1,], writethis[2,], writethis[3,], writethis[4,], writethis[5,], writethis[6,], writethis[7,], writethis[8,], writethis[9,], writethis[10,], sep = "\t"), file = destfileS, ncolumns = 1)
   #writethis<-writethis[,-which(writethis[7,]<=0)]
   #write(paste(writethis[1,], writethis[2,], writethis[3,], writethis[4,], writethis[5,], writethis[6,], writethis[7,], writethis[8,], writethis[9,], writethis[10,], sep = "\t"), file = abovezerofile, ncolumns = 1)
   return(bedfile)
@@ -121,7 +126,7 @@ writeout = function(bedfile) {
 
 
 
-bedfiles = writeout(bednames) #filter all bed files (samples and control)
+bedfiles = writeout(bednamesS) #filter all bed files (samples and control)
 #=======================> DONE!
 
 

@@ -410,7 +410,7 @@ return(mat)
 
 
 #find enriched bins
-pickbins = function(winStart, als, binSize, chromlength, numdup, C, cutoff, strict, mCs, dCs, bkgd) {
+pickbins = function(winStart, als, binSize, chromlength, numdup, C, cutoff, strict, mCs, dCs, bkgdS) {
 
 	if ((winStart + binSize) <= chromlength) {
 		winEnd = winStart + binSize
@@ -421,7 +421,7 @@ pickbins = function(winStart, als, binSize, chromlength, numdup, C, cutoff, stri
 	tempend = winEnd - 1
 
 	#extract subset of the background
-	if (bkgd != "None") {
+	if (bkgdS != "None") {
 		Cs = als[[numdup+1]][winStart:tempend]
 		mCs = mean(Cs)
 		dCs = sd(Cs)
@@ -497,14 +497,14 @@ pickbins = function(winStart, als, binSize, chromlength, numdup, C, cutoff, stri
 
 
 #find enriched wins
-pickwins = function(winStart, coffeeshopSud, als, numdup, startlist, winSize) {
+pickwins = function(winStart, coffeeshopSud, als, numdup, startlist, winSizeS) {
 	
 	plz = which(startlist == winStart)
 	winEnd = coffeeshopSud[plz]
 	rWinSize = winEnd - winStart + 1
 
 
-	if(rWinSize >= winSize) {
+	if(rWinSize >= winSizeS) {
 		mS = rep(0, numdup)
 		for (g in 1:numdup) {
 			mS[g] = (mean(als[[g]][winStart:winEnd])) 
@@ -520,7 +520,7 @@ pickwins = function(winStart, coffeeshopSud, als, numdup, startlist, winSize) {
 
 
 #score windows for fast analysis
-scorewindow = function(winStart, coffeeshopSud, numdup, C, bkgd, als, startlist) {
+scorewindow = function(winStart, coffeeshopSud, numdup, C, bkgdS, als, startlist) {
 	
 	plz = which(startlist == winStart)
 	winEnd = coffeeshopSud[plz]
@@ -538,7 +538,7 @@ scorewindow = function(winStart, coffeeshopSud, numdup, C, bkgd, als, startlist)
 		Rs[,j] = filtfilt(rep(1,80)/80,1,Rsr[,j])
 	}
 	#extract subset of the background
-	if (bkgd != "None") {
+	if (bkgdS != "None") {
 		Cs = als[[numdup+1]]
 		Cmin = min(Cs[Cs > 0])
 		Cs = Cs[winStart:winEnd]
@@ -573,43 +573,58 @@ smoothcounts = function(winStart, coffeeshopSud, numdup, als, startlist) { #help
 	}	
 	return(Rs)
 }
-cluster = function(model, sig, init, clustnummer, noise) { #helper function2
+cluster = function(model, sig, init, clustnummerS, noise) { #helper function2
 	set.seed(samplingSeed)
 	noisy = sample(noise, length(sig[,1]), replace = TRUE)
+  #print(paste("noisy",head(noisy),length(noisy),class(noisy)))
+  print(paste("model",head(model),length(model),class(model)))
+	#print(paste("sig",head(sig),length(sig),class(sig)))
+  print(paste("init",head(init),length(init),class(init)))
+  print(paste("sig+noisy",head(sig+noisy),length(sig+noisy),class(sig+noisy)))
 	clust = me(model, sig+noisy, init)
-	bicc =  bic(model, clust$loglik, length(sig[,1]), length(sig[1,]), clustnummer)
+  print(paste("clust",head(clust[[6]])))
+	bicc =  bic(model, clust$loglik, length(sig[,1]), length(sig[1,]), as.numeric(clustnummerS))
+  print(paste("bicc",head(bicc)))
 	out = list(bicc = bicc, param = clust$parameters)
+  print(paste("out",head(out)))
 	return(out)
 }
-initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnummer, modelnames, noise) { #main function
-	
+initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornumS, clustnummerS, modelnames, noise) { #main function
 	n = length(coffeeshopNord)
+  print(paste("n",n,"als",head(als[[1]])))
 	#smooth extended read counts
-	if (cornum > 1) {
-		sig = mclapply(coffeeshopNord, smoothcounts, coffeeshopSud, numdup, als, startlist = coffeeshopNord, mc.cores = cornum, mc.preschedule = presched)
+	if (cornumS > 1) {
+		sig = mclapply(coffeeshopNord, smoothcounts, coffeeshopSud, numdup, als, startlist = coffeeshopNord, mc.cores = cornumS, mc.preschedule = presched)
 	} else {
 		sig = lapply(coffeeshopNord, smoothcounts, coffeeshopSud, numdup, als, startlist = coffeeshopNord)
 	}
 	sig = do.call(rbind, sig) 
-
+  print(head(sig))
+  print("after sig")
 	#kmeans initialization
 	set.seed(samplingSeed)
-	init = kmeans(sig, clustnummer, nstart = 20)
+	init = kmeans(sig, clustnummerS, nstart = 20)
 	init = unmap(init$cluster)
-	
-
-	if (cornum > 1) {
-		param = mclapply(modelnames, cluster, sig, init, clustnummer, noise, mc.cores = cornum, mc.preschedule = presched)
+  print(head(init))
+  print("after init")
+  print(paste("modelnames",modelnames,"sig",head(sig),"init",head(init),"clustnummerS",clustnummerS,"noise",head(noise)))
+  
+	if (cornumS > 1) {
+		param = mclapply(modelnames, cluster, sig, init, clustnummerS, noise, mc.cores = cornumS, mc.preschedule = presched)
 	} else {
-		param = lapply(modelnames, cluster, sig, init, clustnummer, noise)
+		param = lapply(modelnames, cluster, sig, init, clustnummerS, noise)
 	}
-	
+  print(param)
+  print("after param")
 	bicc = vector(mode = "numeric", length = length(modelnames))
+  print("there")
 	for (i in 1:length(modelnames)) {
 		bicc[i] = as.numeric(param[[i]]$bicc)
 	}
+  print(bicc)
 	bicc = which.max(bicc)
-	
+  print(numdup)
+	print(bicc)
 	out = list(initparam = param[[bicc]]$param, modelname = modelnames[bicc])
 	return(out) 
 }
@@ -618,7 +633,7 @@ initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnu
 
 
 #find peaks
-findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als, noise, startlist, meanAdjust, clustnummer, chromname) {
+findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgdS, resolS, als, noise, startlist, meanAdjust, clustnummerS, chromname) {
 	
 	#print(winStart)
 	plz = which(startlist == winStart)
@@ -649,7 +664,7 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 		}
 	}
 	
-	if (resol != "window") {
+	if (resolS != "window") {
 		
 		#clustering (take 1)
 		take = 1
@@ -661,7 +676,7 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 			
 			#repeat clustering from scratch, take 2!
 			set.seed(samplingSeed)
-			init = kmeans(Rs, clustnummer, nstart = 20)
+			init = kmeans(Rs, clustnummerS, nstart = 20)
 			init = unmap(init$cluster)
 			set.seed(samplingSeed)
 			noisy = sample(noise, rWinSizeTemp, replace = TRUE)
@@ -686,7 +701,7 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 			
 				if ((ccx != 0) && (take == 1)) { #not all replicates agreed? Repeat the clustering with from scratch if not already done!
 					set.seed(samplingSeed)
-					init = kmeans(Rs, clustnummer, nstart = 20)
+					init = kmeans(Rs, clustnummerS, nstart = 20)
 					init = unmap(init$cluster)
 					set.seed(samplingSeed)
 					noisy = sample(noise, rWinSizeTemp, replace = TRUE)
@@ -708,13 +723,13 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 			}
 		}
 		
-		if ((ccx != 0) && (reportNoClust=="y")) { resol = "window" } #clustering did not work and windows should be reported
+		if ((ccx != 0) && (reportNoClust=="y")) { resolS = "window" } #clustering did not work and windows should be reported
 			
 		
 		if (ccx == 0) { #clustering worked and all replicates agree on the cluster assignments
 			
 			#extract subset of the background
-			if (bkgd != "None") {
+			if (bkgdS != "None") {
 				Cs = als[[numdup+1]][winStart:winEnd]
 				Cs = filtfilt(rep(1,80)/80,1,Cs)
 			} else {
@@ -731,7 +746,7 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 			rEnd = locPeak[length(locPeak[,1]),1] #end position of the region
 		
 			#peak resolution check
-			if (resol == "region") {
+			if (resolS == "region") {
 				pSize = rEnd - rStart
 				signal = (geomean(Rs[rStart:rEnd,])) 
 				signal2 = (signal) - (Cs[rStart:rEnd])
@@ -752,7 +767,7 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 					writethis[[8]] = "-1"
 					writethis[[9]] = summit
 				}
-			} else if (resol == "peak") {
+			} else if (resolS == "peak") {
 				#find out where separate peaks are
 				d = diff(locPeak[,1]) 
 				d[length(d)+1] = 0		
@@ -795,10 +810,10 @@ findpeak = function(winStart, coffeeshopSud, numdup, C, param, bkgd, resol, als,
 		} #clustering worked and all replicates agree on clustering assignments?
 	} #window resolution check
 	
-	if (resol == "window") {
+	if (resolS == "window") {
 	
 		#extract subset of the background
-		if (bkgd != "None") {
+		if (bkgdS != "None") {
 			Cs = als[[numdup+1]][winStart:winEnd]
 			Cs = filtfilt(rep(1,80)/80,1,Cs)
 		} else {
@@ -852,12 +867,12 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   als <- NA
   #read in read information from background. If chromosome is not in background, it won't be considered for peakcalling
   if(!is.na(ibkgd)){
-    als <- mclapply(ibkgd,readdata,chromname,chromlength,kpduplicates,indexfile=ibkgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
+    als <- mclapply(ibkgd,readdata,chromname,chromlength,kpduplicates,indexfile=ibkgdindex,mc.cores=cornumS,mc.preschedule=presched,curnum=curnum)
     if(all(is.na(als))) {
       countlist[[chromname]] <- NULL
       return(NULL)
     } else {
-      alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
+      alsf <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornumS,mc.preschedule=presched,curnum=curnum)
       if(all(is.na(alsf))){
         countlist[[chromname]] <- NULL
         message(paste("Chromosome",chromname,"is in background, but in neither of the sample files"))
@@ -868,7 +883,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     }
     #without background: read all sample file information for that chromosome
   } else {
-    als <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornum,mc.preschedule=presched,curnum=curnum)
+    als <- mclapply(ifrgd,readdata,chromname,chromlength,kpduplicates,indexfile=ifrgdindex,mc.cores=cornumS,mc.preschedule=presched,curnum=curnum)
     if(is.na(als)) {
       countlist[[chromname]] <- NULL
       return(NULL)
@@ -879,6 +894,8 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   ptm <- proc.time()
   
   #count reads for every file seperately
+  print(paste("length als",length(als)))
+  print(paste("length frags",length(frags)))
   for(i in 1:length(als)){
     alscur<-NA;curvector<-NA
     alscur <- als[[i]]
@@ -931,17 +948,20 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
     mCount = mean(curvector)
     if (curnum==1 || starting) {
       curvector = curvector/mCount
-      write(paste(mCount), file = paste0(out, "/norma.", i, ".info"))
+      write(paste(mCount), file = paste0(outS, "/norma.", i, ".info"))
     } else {
-      meanCounts = mean(as.numeric(read.table(paste0(out, "/norma.", i, ".info"))[[1]]))
+      meanCounts = mean(as.numeric(read.table(paste0(outS, "/norma.", i, ".info"))[[1]]))
       if ((mCount >  (5*meanCounts)) || (mCount <  (0.2*meanCounts))) {
         mCount = meanCounts
       } else {
-        write(paste(mCount), file = paste0(out, "/norma.", i, ".info"), append = TRUE)
+        write(paste(mCount), file = paste0(outS, "/norma.", i, ".info"), append = TRUE)
       }
       curvector = curvector/mCount
     }
     als[[i]] <- curvector
+    print(paste("als no.",i,"len curvector",length(curvector)))
+    print(paste("sum curvector normalized",sum(curvector)))
+    print(paste("mean curvector normalized",mean(curvector)))
     rm(curvector,alscur,curvector)
     gc()
   }
@@ -967,7 +987,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   
   #make bins vector
   bins = seq(from = 1, to = (chromlength - 1), by = binSize)
-  numdup=nreps
+  numdup=nrepsS
   #=======================> DONE!
   
   print("Time til preliminary stuff")
@@ -976,9 +996,9 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
 
   cat("\n","Calling peaks of chromosome",chromname)
   if (curnum == 1 || starting) {
-    write(paste(samplingSeed), file = paste0(out, "/seed.info"))
+    write(paste(samplingSeed), file = paste0(outS, "/seed.info"))
   } else {
-    samplingSeed = as.numeric(read.table(paste0(out, "/seed.info"), header = FALSE)[[1]])
+    samplingSeed = as.numeric(read.table(paste0(outS, "/seed.info"), header = FALSE)[[1]])
   }  
 
   # ============================ 
@@ -986,7 +1006,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   # ============================ 
   if (curnum == 1 || starting){ #first chromosome, estimate bkgd (includes SNR cutoff)
     if (is.na(cutoff)) {
-      if (bkgd != "None") {
+      if (bkgdS != "None") {
         cutoff = vector(length = numdup)
         sdC = sd(als[[numdup+1]])
         for (x in 1:numdup) {
@@ -995,7 +1015,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         cutoff = max(cutoff)
         C = NULL
         mCs = NULL
-        write(paste(c(cutoff,NA,NA)), file = paste0(out, "/bkgd.info"), append = TRUE)
+        write(paste(c(cutoff,NA,NA)), file = paste0(outS, "/bkgd.info"), append = TRUE)
       } else {
         cutoff = vector(length = numdup)
         mmV = var(geomeanL(als))
@@ -1012,16 +1032,16 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         snow = sample(C, binSize*5, replace = TRUE)
         mCs = mean(snow)
         dCs = sd(snow)
-        write(paste(c(cutoff,sigma,mu)), file = paste0(out, "/bkgd.info"), append = TRUE)
+        write(paste(c(cutoff,sigma,mu)), file = paste0(outS, "/bkgd.info"), append = TRUE)
       }
     }
   } else { #bkgd estimated from before
-    bkgdInfo = read.table(paste0(out, "/bkgd.info"), header = FALSE)
+    bkgdInfo = read.table(paste0(outS, "/bkgd.info"), header = FALSE)
     if (is.na(cutoff)) {
       cutoff = as.numeric(bkgdInfo[[1]][1])
     }
     
-    if (bkgd != "None") {
+    if (bkgdS != "None") {
       C = NULL
       mCs = NULL
     } else {
@@ -1048,10 +1068,10 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   # ======================== 
   # Picking Enriched Windows
   # ========================
-  if (cornum > 1) {
-    coffeeshop = mclapply(bins, pickbins, als, binSize, chromlength, numdup, C, cutoff, strict, mCs, dCs, bkgd, mc.cores = cornum, mc.preschedule = presched)
+  if (cornumS > 1) {
+    coffeeshop = mclapply(bins, pickbins, als, binSize, chromlength, numdup, C, cutoff, strict, mCs, dCs, bkgdS, mc.cores = cornumS, mc.preschedule = presched)
   } else {
-    coffeeshop = lapply(bins, pickbins, als, binSize, chromlength, numdup, C, cutoff, strict, mCs, dCs, bkgd)
+    coffeeshop = lapply(bins, pickbins, als, binSize, chromlength, numdup, C, cutoff, strict, mCs, dCs, bkgdS)
   }
   coffeeshop = as.numeric(unlist(coffeeshop))
   coffeeshop[coffeeshop != numdup] = 0
@@ -1074,10 +1094,10 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       }
       
       
-      if (cornum > 1) {
-        coffeeshop = mclapply(coffeeshopNord, pickwins, coffeeshopSud, als, numdup, startlist = coffeeshopNord, winSize, mc.cores = cornum, mc.preschedule = presched)
+      if (cornumS > 1) {
+        coffeeshop = mclapply(coffeeshopNord, pickwins, coffeeshopSud, als, numdup, startlist = coffeeshopNord, winSizeS, mc.cores = cornumS, mc.preschedule = presched)
       } else {
-        coffeeshop = lapply(coffeeshopNord, pickwins, coffeeshopSud, als, numdup, startlist = coffeeshopNord, winSize)
+        coffeeshop = lapply(coffeeshopNord, pickwins, coffeeshopSud, als, numdup, startlist = coffeeshopNord, winSizeS)
       }
       coffeeshop = as.numeric(unlist(coffeeshop))
       coffeeshop = cbind(coffeeshopNord, coffeeshopSud, coffeeshop)
@@ -1098,13 +1118,13 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       # Initializing Clustering Parameters
       # ===================================
       if (length(coffeeshop[,1]) > 0) { #any enriched windows detected?
-        if (initialize == "deterministic") {
+        if (initializeS == "deterministic") {
           yummy = ceiling(length(coffeeshop[,1]) / 1000)
           if (yummy == 0) {
             yummy = 1
           }
         }
-        if (initialize == "stochastic") {
+        if (initializeS == "stochastic") {
           yummy = ceiling(length(coffeeshop[,1]) / 4)
           if (yummy > 20) {
             set.seed(samplingSeed)
@@ -1119,7 +1139,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         coffeeshopSud = coffeeshop[yummy,2]
         set.seed(samplingSeed)
         noise = rnorm(100000, mean=0, sd=0.1)
-        param = initparam(coffeeshopNord, coffeeshopSud, numdup, als, cornum, clustnummer, modelnames, noise)
+        param = initparam(coffeeshopNord, coffeeshopSud, numdup, als, cornumS, clustnummerS, modelnames, noise)
         print("Time til clustering parameters")
         print(proc.time()-ptm)
         ptm <- proc.time()
@@ -1132,20 +1152,20 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         # ========================== 
         # Enriched Window Filtering
         # ==========================
-        if (windowe != 1) { #do it only if window fold enrichment filtering is required
-          if (cornum > 1) {
-            scores = mclapply(coffeeshop[,1], scorewindow, coffeeshop[,2], numdup, C, bkgd, als, startlist = coffeeshop[,1], mc.cores = cornum, mc.preschedule = presched)
+        if (windoweS != 1) { #do it only if window fold enrichment filtering is required
+          if (cornumS > 1) {
+            scores = mclapply(coffeeshop[,1], scorewindow, coffeeshop[,2], numdup, C, bkgdS, als, startlist = coffeeshop[,1], mc.cores = cornumS, mc.preschedule = presched)
           } else {
-            scores = lapply(coffeeshop[,1], scorewindow, coffeeshop[,2], numdup, C, bkgd, als, startlist = coffeeshop[,1])
+            scores = lapply(coffeeshop[,1], scorewindow, coffeeshop[,2], numdup, C, bkgdS, als, startlist = coffeeshop[,1])
           }
           scores = unlist(scores)
           
-          if (windowe == "auto") {
+          if (windoweS == "auto") {
             lscores = log(scores)
             if (length(scores) > 0) {
               if (curnum == 1 || starting) {
                 cutthisTEMP = ((mean(lscores)) + (sd(lscores)*1))
-                write(paste(cutthisTEMP), file = paste0(out, "/bkgd.info"), append = TRUE)
+                write(paste(cutthisTEMP), file = paste0(outS, "/bkgd.info"), append = TRUE)
               } else {
                 cutthisTEMP = as.numeric(bkgdInfo[[1]][4])
               }
@@ -1156,13 +1176,13 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
               if (curnum == 1 || starting) {
                 cutthisTEMP = 0
                 cutthisW = "Not Applicable, All Windows Analyzed!"
-                write(paste(cutthisTEMP), file = paste0(out, "/bkgd.info"), append = TRUE)
+                write(paste(cutthisTEMP), file = paste0(outS, "/bkgd.info"), append = TRUE)
               }
             }
           } else {
-            cutthisW = windowe
+            cutthisW = windoweS
             if (length(scores) > 0) {
-              finalwins = which(scores >= windowe)
+              finalwins = which(scores >= windoweS)
               coffeeshop = cbind(coffeeshop[finalwins,1], coffeeshop[finalwins,2], coffeeshop[finalwins,3])
             }
           }
@@ -1181,10 +1201,10 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
         # ==============
         if (nrow(coffeeshop) > 0) { #any enriched windows left after filtering?
           coffeeshop = cbind(coffeeshop[,1], coffeeshop[,2])
-          if (cornum > 1) {
-            peaks = mclapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgd, resol, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummer, chromname=chromname,mc.cores = cornum, mc.preschedule = presched)
+          if (cornumS > 1) {
+            peaks = mclapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgdS, resolS, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummerS, chromname=chromname,mc.cores = cornumS, mc.preschedule = presched)
           } else {
-            peaks = lapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgd, resol, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummer, chromname=chromname)
+            peaks = lapply(coffeeshop[,1], findpeak, coffeeshop[,2], numdup, C, param, bkgdS, resolS, als, noise, startlist = coffeeshop[,1], meanAdjust, clustnummerS, chromname=chromname)
           }
           if (!(is.null(peaks))) { #any peaks discovered?
             writethis = processPeaks(peaks)
@@ -1202,14 +1222,14 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
             # =========================
           } else { nothing = TRUE } #no peaks
         } else { nothing = TRUE } #no enriched windows left after filtering
-      } else { nothing = TRUE; cutthisW = windowe } #no enriched widnows discovered
-    } else { nothing = TRUE; cutthisW = windowe } #no enriched bins discovered
-  } else { nothing = TRUE; cutthisW = windowe } #no enriched bins discovered
+      } else { nothing = TRUE; cutthisW = windoweS } #no enriched widnows discovered
+    } else { nothing = TRUE; cutthisW = windoweS } #no enriched bins discovered
+  } else { nothing = TRUE; cutthisW = windoweS } #no enriched bins discovered
   
   if (isTRUE(nothing)) {
-    file.create(paste0(out, "/", chromname, ".peaks.bed"))
-    print(paste0("file is: ",out, "/", chromname, ".peaks.bed"))
-    write(paste(chromname, minpeak, sep = "  "), file = paste0(out, "/min.peaksize"), append=TRUE)
+    file.create(paste0(outS, "/", chromname, ".peaks.bed"))
+    print(paste0("file is: ",outS, "/", chromname, ".peaks.bed"))
+    write(paste(chromname, minpeak, sep = "  "), file = paste0(outS, "/min.peaksize"), append=TRUE)
     
     if (curnum == 1 || starting) {
       message(paste0("No peaks found! - Window Fold Enrichment: ", cutthisW, " - Seed: ", samplingSeed))
@@ -1217,8 +1237,8 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
       message("No peaks found!")
     }
   } else {
-    write(paste(chromname, writethis$X1, writethis$X2, writethis$X3, writethis$X4, writethis$X5, writethis$X6, writethis$X7, writethis$X8, writethis$X9, minpeak, sep = "	"), file = paste0(out, "/", chromname, ".peaks.bed"), ncolumns = 1)
-    write(paste(chromname, minpeak, sep = "	"), file = paste0(out, "/min.peaksize"), append=TRUE)
+    write(paste(chromname, writethis$X1, writethis$X2, writethis$X3, writethis$X4, writethis$X5, writethis$X6, writethis$X7, writethis$X8, writethis$X9, minpeak, sep = "	"), file = paste0(outS, "/", chromname, ".peaks.bed"), ncolumns = 1)
+    write(paste(chromname, minpeak, sep = "	"), file = paste0(outS, "/min.peaksize"), append=TRUE)
     
     
     if (curnum == 1 || starting) {
@@ -1237,6 +1257,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   
 resizetorange <- function(als,FragLength,chromlength){
   #extends/truncates reads to fragment length and deletes the ones that don't match chromosome size anymore
+  print(FragLength)
   als <- resize(als, FragLength)
   starts<-start(ranges(als));ends<-end(ranges(als));seqnames<-as.character(seqnames(als));strands<-as.character(strand(als))
   als <- mapply(removeOutOfRangeReads,starts,ends,seqnames,strands,chromlength)
@@ -1300,27 +1321,27 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
 }
 
 #iterates over all different chromosomes existing in all files
-iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadChromVector, nbkgd,bins)
+iterateoverchromosomes <- function (ibamS, iindexS, kpduplicates=FALSE, RCV=ReadChromVector, nbkgdS,bins)
 {
   ptm <- proc.time()
   #store background and sample files and their index files in different variables
-  if(nbkgd!=0)
+  if(nbkgdS!=0)
   {
-    ibkgd <- ibam[(length(ibam)-nbkgd+1):length(ibam)]
-    ibkgdindex <- iindex[(length(iindex)-nbkgd+1):length(iindex)]
-    ifrgd <- ibam[1:(length(ibam)-nbkgd)]
-    ifrgdindex <- iindex[1:(length(iindex)-nbkgd)]
+    ibkgd <- ibamS[(length(ibamS)-nbkgdS+1):length(ibamS)]
+    ibkgdindex <- iindexS[(length(iindexS)-nbkgdS+1):length(iindexS)]
+    ifrgd <- ibamS[1:(length(ibamS)-nbkgdS)]
+    ifrgdindex <- iindexS[1:(length(iindexS)-nbkgdS)]
     print(ibkgd);print(ifrgd);
   } else {
-    ifrgd <- ibam
-    ifrgdindex <- iindex
+    ifrgd <- ibamS
+    ifrgdindex <- iindexS
     ibkgd <- NA
     ibkgdindex <- NA
   }
   #collect all different chromosomes from all the files
   countlist <- list()
-  for (i in 1:(length(ibam))){
-    bamfile <- BamFile(ibam[[i]])
+  for (i in 1:(length(ibamS))){
+    bamfile <- BamFile(ibamS[[i]])
     countlist <- c(countlist,makeCountList(seqnames(seqinfo(bamfile)),chromName,chromSize,RCV))
     chromnames <- names(countlist)
   }
@@ -1331,7 +1352,7 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
   cat("\n","Counting:",length(chromnames),"elements","\n")
   print("Time til calling peakfindermain")
   print(proc.time()-ptm)
-  dummy <- mclapply(chromnames,peakfindermain,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd,ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex,mc.cores=cornum,mc.preschedule=presched,frags=frags,bins=bins)
+  dummy <- mclapply(chromnames,peakfindermain,countlist=countlist,chromreference=chromnames,ifrgd=ifrgd,ifrgdindex=ifrgdindex,ibkgd=ibkgd,ibkgdindex=ibkgdindex,mc.cores=cornumS,mc.preschedule=presched,frags=frags,bins=bins)
 }
 
 #=======================> DONE!
@@ -1347,194 +1368,231 @@ iterateoverchromosomes <- function (ibam, iindex, kpduplicates=FALSE, RCV=ReadCh
 # ========================== 
 # Parse-in System Variables
 # ==========================
-args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
+#args = commandArgs(trailingOnly = TRUE) # Read Arguments from command line
 
 #Parsing arguments and storing values
-for (each.arg in args) {
-	#chormosome size file
-	if (grepl('-sfile=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				size.file <- arg.split[2]
-		} else {
-			stop('No genome size file')
-		} 
-	}
-	#bed files directory
-	if (grepl('-frag=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				frag <- arg.split[2]
-		} else {
-			stop('No fragment length given')
-		} 
-	}	
-	#background files directory
-	if (grepl('-bkgd=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				bkgd <- arg.split[2]
-		} else {
-			message("No reads found in one or more replicates!")
-			quit()
-		} 
-	}	
-	#background files directory
-	if (grepl('-out=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				out <- arg.split[2]
-		} else {
-			stop('No output directory given')
-		} 
-	}
-	#Cluster number
-	if (grepl('-clustnummer=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				clustnummer <- as.numeric(arg.split[2])
-		} 
-	}
-	#resolution
-	if (grepl('-resolution=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				resol <- arg.split[2]
-		} 
-	}
-	#processor cores
-	if (grepl('-p=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				cornum <- as.numeric(arg.split[2])
-		} 
-	}
-	#minimum window size
-	if (grepl('-window=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			winSize <- arg.split[2]
-		} 
-	}
-	#window size
-	if (grepl('-bin=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			binsize <- arg.split[2]
-		} 
-	}
-	#type (paired / single)
-	if (grepl('-type=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			type <- arg.split[2]
-		} 
-	}
-	#bed file names
-	if (grepl('-ibam=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				ibam <- arg.split[2]
-		} else {
-			message("No reads found in one or more replicates!")
-		} 
-	}
-	#index files
-	if (grepl('-iindex=',each.arg)) {
-	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-	  if (! is.na(arg.split[2]) ) {
-	    iindex <- arg.split[2]
-	  } else {
-	    stop('No index file for one or multiple bam files given')
-	  } 
-	}	
-	#window enrichment cutoff
-	if (grepl('-windowe=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			windowe <- arg.split[2]
-		} 
-	}
-	#initialize
-	if (grepl('-initModel=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-			initialize <- arg.split[2]
-		} 
-	}
-	#keep duplicates or not
-	if (grepl('-uniq=',each.arg)) {
-	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-	  if (! is.na(arg.split[2]) ) {
-	    uniq <- as.character(arg.split[2])
-	    if(uniq=="y"){
-	      uniq=TRUE
-	    } else {
-	      uniq=FALSE
-	    }
-	  } 
-	}
-	#number of replicates
-	if (grepl('-nreps=',each.arg)) {
-		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-		if (! is.na(arg.split[2]) ) {
-				nreps <- as.numeric(arg.split[2])
-		} 
-	}
-  
-	#number of background files
-	if (grepl('-nbkgd=',each.arg)) {
-	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
-	  if (! is.na(arg.split[2]) ) {
-	    nbkgd <- as.numeric(arg.split[2])
-	  }
-    else {
-      nbkgd <- 0
-    }
-	}
+#for (each.arg in args) {
+#	#chormosome size file
+#	if (grepl('-sfile=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				size.file <- arg.split[2]
+#		} else {
+#			stop('No genome size file')
+#		} 
+#	}
+#	#bed files directory
+#	if (grepl('-frag=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				frag <- arg.split[2]
+#		} else {
+#			stop('No fragment length given')
+#		} 
+#	}	
+#	#background files directory
+#	if (grepl('-bkgd=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				bkgd <- arg.split[2]
+#		} else {
+#			message("No reads found in one or more replicates!")
+#			quit()
+#		} 
+#	}	
+#	#background files directory
+#	if (grepl('-out=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				out <- arg.split[2]
+#		} else {
+#			stop('No output directory given')
+#		} 
+#	}
+#	#Cluster number
+#	if (grepl('-clustnummer=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				clustnummer <- as.numeric(arg.split[2])
+#		} 
+#	}
+#	#resolution
+#	if (grepl('-resolution=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				resol <- arg.split[2]
+#		} 
+#	}
+#	#processor cores
+#	if (grepl('-p=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				cornum <- as.numeric(arg.split[2])
+#		} 
+#	}
+#	#minimum window size
+#	if (grepl('-window=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			winSize <- arg.split[2]
+#		} 
+#	}
+#	#window size
+#	if (grepl('-bin=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			binsize <- arg.split[2]
+#		} 
+#	}
+#	#type (paired / single)
+#	if (grepl('-type=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			type <- arg.split[2]
+#		} 
+#	}
+#	#bed file names
+#	if (grepl('-ibam=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				ibam <- arg.split[2]
+#		} else {
+#			message("No reads found in one or more replicates!")
+#		} 
+#	}
+#	#index files
+#	if (grepl('-iindex=',each.arg)) {
+#	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#	  if (! is.na(arg.split[2]) ) {
+#	    iindex <- arg.split[2]
+#	  } else {
+#	    stop('No index file for one or multiple bam files given')
+#	  } 
+#	}	
+#	#window enrichment cutoff
+#	if (grepl('-windowe=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			windowe <- arg.split[2]
+#		} 
+#	}
+#	#initialize
+#	if (grepl('-initModel=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#			initialize <- arg.split[2]
+#		} 
+#	}
+#	#keep duplicates or not
+#	if (grepl('-uniq=',each.arg)) {
+#	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#	  if (! is.na(arg.split[2]) ) {
+#	    uniq <- as.character(arg.split[2])
+#	    if(uniq=="y"){
+#	      uniq=TRUE
+#	    } else {
+#	      uniq=FALSE
+#	    }
+#	  }
+#	}
+#	#number of replicates
+#	if (grepl('-nreps=',each.arg)) {
+#		arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#		if (! is.na(arg.split[2]) ) {
+#				nreps <- as.numeric(arg.split[2])
+#		} 
+#	}
+#  
+#	#number of background files
+#	if (grepl('-nbkgd=',each.arg)) {
+#	  arg.split <- strsplit(each.arg,'=',fixed=TRUE)[[1]] 
+#	  if (! is.na(arg.split[2]) ) {
+#	    nbkgd <- as.numeric(arg.split[2])
+#	  }
+#    else {
+#      nbkgd <- 0
+#    }
+#	}
+#}
+
+
+if(!is.na(uniqS)){
+  uniqS <- as.character(uniqS)
+  if(uniqS=="y"){
+    uniqS=TRUE
+  } else {
+    uniqS=FALSE
+  }
+}
+
+if(is.na(sfileS)){
+  stop('No chromosome size file')
+}
+if(is.na(ibamS)){
+  stop('No sample or input files')
+}
+if(is.na(iindexS)){
+  stop('No index file for one or multiple bam files given')
+}
+if(is.na(fragS)){
+  stop('No fragment length given')
+}
+if(is.na(bkgdS)){
+  stop('No background file directory')
+}
+if(is.na(nbkgdS)){
+  nbkgdS <- 0
+} else {
+  nbkgdS <- as.numeric(nbkgdS)
+}
+if(is.na(outS)){
+  stop('No output directory given')
 }
 
 
-
+clustnummerS<-as.numeric(clustnummerS)
 ##Parse in variables
-chromosomes = read.table(size.file, header=FALSE)
+chromosomes = read.table(sfileS, header=FALSE)
 chromName = as.character(chromosomes$V1); #which chromosome
 chromSize = as.numeric(chromosomes$V2); #chromosomes size
 rm(chromosomes)
 ReadChromVector <- chromName
-iindex = strsplit(iindex, ",", fixed = TRUE)[[1]]
-ibam = as.list(strsplit(ibam, ",", fixed = TRUE)[[1]])
+#iindexS = strsplit(iindexS, ",", fixed = TRUE)[[1]]
+#ibamS = as.list(strsplit(ibamS, ",", fixed = TRUE)[[1]])
 #print(paste("ibam is",ibam))
-numdup = length(ibam) #number of replicates
+numdup = length(ibamS) #number of replicates
+nrepsS <- as.numeric(nrepsS)
+cornumS <- as.numeric(cornumS)
 
-if (numdup != nreps+nbkgd) {
-  print(paste("numdup, Anzahl der samplefiles:",numdup,"nreps:",nreps))
+if (numdup != nrepsS+nbkgdS) {
+  print(paste("numdup, Anzahl der samplefiles:",numdup,"nreps:",nrepsS))
 	message("No reads found in one or more replicates!")
 	quit()
 }
 
 
-winSize = as.numeric(winSize)
-binSize = as.numeric(binsize)
-winSize = binSize * winSize
+winSizeS = as.numeric(winSizeS)
+binSize = as.numeric(binsizeS)
+winSizeS = binSize * winSizeS
 starting = TRUE
 
-if (type == "single") {
-	frags = as.numeric(strsplit(frag, ",", fixed = TRUE)[[1]])
+if (typeS == "single") {
+	#frags = as.numeric(strsplit(fragS, ",", fixed = TRUE)[[1]])
+  frags=as.numeric(fragS)
 } else {
   message("Unfortunately, type paired doesn't work yet")
 }
 
 rm(bednames)
 
-if (nreps > 1) {
+if (nrepsS > 1) {
 	modelnames = c("VVV","VEV")
 } else {
 	modelnames = "V"
 }
 
-if (windowe != "auto") {
-	windowe = as.numeric(windowe)
+if (windoweS != "auto") {
+	windoweS = as.numeric(windoweS)
 }
 
 nothing = FALSE #default is we found some peaks
@@ -1552,7 +1610,7 @@ options(stringsAsFactors = FALSE)
 # Counting Reads
 # ===============
 
-iterateoverchromosomes(ibam=ibam, iindex=iindex, kpduplicates=uniq,RCV=ReadChromVector,nbkgd=nbkgd,bins=bins)
+iterateoverchromosomes(ibamS=ibamS, iindexS=iindexS, kpduplicates=uniqS,RCV=ReadChromVector,nbkgdS=nbkgdS,bins=bins)
 
 
 
