@@ -577,21 +577,21 @@ cluster = function(model, sig, init, clustnummerS, noise) { #helper function2
 	set.seed(samplingSeed)
 	noisy = sample(noise, length(sig[,1]), replace = TRUE)
   #print(paste("noisy",head(noisy),length(noisy),class(noisy)))
-  print(paste("model",head(model),length(model),class(model)))
+  #print(paste("model",head(model),length(model),class(model)))
 	#print(paste("sig",head(sig),length(sig),class(sig)))
-  print(paste("init",head(init),length(init),class(init)))
-  print(paste("sig+noisy",head(sig+noisy),length(sig+noisy),class(sig+noisy)))
+  #print(paste("init",head(init),length(init),class(init)))
+  #print(paste("sig+noisy",head(sig+noisy),length(sig+noisy),class(sig+noisy)))
 	clust = me(model, sig+noisy, init)
-  print(paste("clust",head(clust[[6]])))
+  #print(paste("clust",head(clust[[6]])))
 	bicc =  bic(model, clust$loglik, length(sig[,1]), length(sig[1,]), as.numeric(clustnummerS))
-  print(paste("bicc",head(bicc)))
+  #print(paste("bicc",head(bicc)))
 	out = list(bicc = bicc, param = clust$parameters)
-  print(paste("out",head(out)))
+  #print(paste("out",head(out)))
 	return(out)
 }
 initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornumS, clustnummerS, modelnames, noise) { #main function
 	n = length(coffeeshopNord)
-  print(paste("n",n,"als",head(als[[1]])))
+  #print(paste("n",n,"als",head(als[[1]])))
 	#smooth extended read counts
 	if (cornumS > 1) {
 		sig = mclapply(coffeeshopNord, smoothcounts, coffeeshopSud, numdup, als, startlist = coffeeshopNord, mc.cores = cornumS, mc.preschedule = presched)
@@ -599,32 +599,31 @@ initparam = function(coffeeshopNord, coffeeshopSud, numdup, als, cornumS, clustn
 		sig = lapply(coffeeshopNord, smoothcounts, coffeeshopSud, numdup, als, startlist = coffeeshopNord)
 	}
 	sig = do.call(rbind, sig) 
-  print(head(sig))
-  print("after sig")
+  #print(head(sig))
+  #print("after sig")
 	#kmeans initialization
 	set.seed(samplingSeed)
 	init = kmeans(sig, clustnummerS, nstart = 20)
 	init = unmap(init$cluster)
-  print(head(init))
-  print("after init")
-  print(paste("modelnames",modelnames,"sig",head(sig),"init",head(init),"clustnummerS",clustnummerS,"noise",head(noise)))
+  #print(head(init))
+  #print("after init")
+  #print(paste("modelnames",modelnames,"sig",head(sig),"init",head(init),"clustnummerS",clustnummerS,"noise",head(noise)))
   
 	if (cornumS > 1) {
 		param = mclapply(modelnames, cluster, sig, init, clustnummerS, noise, mc.cores = cornumS, mc.preschedule = presched)
 	} else {
 		param = lapply(modelnames, cluster, sig, init, clustnummerS, noise)
 	}
-  print(param)
-  print("after param")
+  #print(param)
+  #print("after param")
 	bicc = vector(mode = "numeric", length = length(modelnames))
-  print("there")
 	for (i in 1:length(modelnames)) {
 		bicc[i] = as.numeric(param[[i]]$bicc)
 	}
-  print(bicc)
+  #print(bicc)
 	bicc = which.max(bicc)
-  print(numdup)
-	print(bicc)
+  #print(numdup)
+	#print(bicc)
 	out = list(initparam = param[[bicc]]$param, modelname = modelnames[bicc])
 	return(out) 
 }
@@ -862,6 +861,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
 {
   ptm <- proc.time()
   chromlength <- as.integer(countlist[[chromname]])
+  #print(chromlength)
   curnum = which(chromreference == chromname)
   cat(paste0(chromname,", ",curnum,"; "))
   als <- NA
@@ -894,8 +894,8 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   ptm <- proc.time()
   
   #count reads for every file seperately
-  print(paste("length als",length(als)))
-  print(paste("length frags",length(frags)))
+  #print(paste("length als",length(als)))
+  #print(paste("length frags",length(frags)))
   for(i in 1:length(als)){
     alscur<-NA;curvector<-NA
     alscur <- als[[i]]
@@ -1257,7 +1257,7 @@ peakfindermain <- function(chromname,countlist,kpduplicates=FALSE,chromreference
   
 resizetorange <- function(als,FragLength,chromlength){
   #extends/truncates reads to fragment length and deletes the ones that don't match chromosome size anymore
-  print(FragLength)
+  #print(FragLength)
   als <- resize(als, FragLength)
   starts<-start(ranges(als));ends<-end(ranges(als));seqnames<-as.character(seqnames(als));strands<-as.character(strand(als))
   als <- mapply(removeOutOfRangeReads,starts,ends,seqnames,strands,chromlength)
@@ -1283,6 +1283,7 @@ removeOutOfRangeReads <- function(start,end,seqname,strand,chromlength)
 
 readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexfile, curnum)
 {
+  print(bamfile)
   bamfile <- BamFile(bamfile)
   als <- NA; alsover <- NA
   param <- ScanBamParam()
@@ -1296,9 +1297,9 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
   #################################################
   
   #are there reads after the chromosome end? If yes length information probably doesn't fit file
-  alsover <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(chromname,IRanges(as.integer(chromlength),536870912))))
+  alsover <- readGAlignments(bamfile,index=indexfile,param=ScanBamParam(which=GRanges(chromname,IRanges(as.integer(chromlength+1),536870912))))
   if(!!length(alsover)){
-    message("Warning: Chromosome ",chromname,"has reads beyond chromosome length!")
+    message("Warning: Chromosome ",chromname,"beyond chromosome length!")
     if (curnum==1) {
       message("ERROR: The first chromosome in the analysis was skipped. I can not calculate normalization factors. You can either delete this chromosome from your chromosome size file or fix the previous warning!")
       quit(status=1)
@@ -1309,7 +1310,7 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
   rm(alsover)
   
   if (!length(als))
-  { 
+  {
     return(NA)
   }
   
@@ -1317,6 +1318,7 @@ readdata <- function(bamfile, chromname, chromlength, kpduplicates=FALSE, indexf
   if (kpduplicates){
     als <- unique(als)
   }
+  #print("here")
   return(als)
 }
 
